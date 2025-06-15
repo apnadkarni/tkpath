@@ -69,28 +69,28 @@ test canvRect-2.2 {CreateRectOval procedure} \
 
 test canvRect-2.3 {CreateRectOval procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "x"}} \
+-result {1 {expected screen distance but got "x"}} \
 -body {
     list [catch {.c create rectangle x 2 3 4} msg] $msg
 }
 
 test canvRect-2.4 {CreateRectOval procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "y"}} \
+-result {1 {expected screen distance but got "y"}} \
 -body {
     list [catch {.c create rectangle 1 y 3 4} msg] $msg
 }
 
 test canvRect-2.5 {CreateRectOval procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "z"}} \
+-result {1 {expected screen distance but got "z"}} \
 -body {
     list [catch {.c create rectangle 1 2 z 4} msg] $msg
 }
 
 test canvRect-2.6 {CreateRectOval procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "q"}} \
+-result {1 {expected screen distance but got "q"}} \
 -body {
     list [catch {.c create rectangle 1 2 3 q} msg] $msg
 }
@@ -128,7 +128,7 @@ test canvRect-3.1 {RectOvalCoords procedure} \
 
 test canvRect-3.2 {RectOvalCoords procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "a"}} \
+-result {1 {expected screen distance but got "a"}} \
 -body {
     .c create rectangle 10 20 30 40 -tags x
     list [catch {.c coords x a 2 3 4} msg] $msg
@@ -136,7 +136,7 @@ test canvRect-3.2 {RectOvalCoords procedure} \
 
 test canvRect-3.3 {RectOvalCoords procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "b"}} \
+-result {1 {expected screen distance but got "b"}} \
 -body {
     .c create rectangle 10 20 30 40 -tags x
     list [catch {.c coords x 1 b 3 4} msg] $msg
@@ -144,7 +144,7 @@ test canvRect-3.3 {RectOvalCoords procedure} \
 
 test canvRect-3.4 {RectOvalCoords procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "c"}} \
+-result {1 {expected screen distance but got "c"}} \
 -body {
     .c create rectangle 10 20 30 40 -tags x
     list [catch {.c coords x 1 2 c 4} msg] $msg
@@ -152,7 +152,7 @@ test canvRect-3.4 {RectOvalCoords procedure} \
 
 test canvRect-3.5 {RectOvalCoords procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "d"}} \
+-result {1 {expected screen distance but got "d"}} \
 -body {
     .c create rectangle 10 20 30 40 -tags x
     list [catch {.c coords x 1 2 3 d} msg] $msg

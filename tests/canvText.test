@@ -22,8 +22,8 @@ foreach test {
     {-stipple gray50 gray50 xyz {bitmap "xyz" not defined}}
     {-tags {test a b c} {test a b c} {} {}}
     {-text xyz xyz {} {}}
-    {-underline 0 0 xyz {expected integer but got "xyz"}}
-    {-width 6 6 xyz {bad screen distance "xyz"}}
+    {-underline 0 0 xyz {bad index "xyz": must be integer?[+-]integer?, end?[+-]integer?, or ""}}
+    {-width 6 6 xyz {expected screen distance but got "xyz"}}
 } {
     lassign $test name goodValue goodResult badValue badResult
     test canvText-1.$i "configuration options: good value for $name" \
@@ -68,14 +68,14 @@ test canvText-2.1 {CreateText procedure: args} \
 
 test canvText-2.2 {CreateText procedure: args} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "xyz"}} \
+-result {1 {expected screen distance but got "xyz"}} \
 -body {
     list [catch {.c create text xyz 0} msg] $msg
 }
 
 test canvText-2.3 {CreateText procedure: args} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "xyz"}} \
+-result {1 {expected screen distance but got "xyz"}} \
 -body {
     list [catch {.c create text 0 xyz} msg] $msg
 }
@@ -111,7 +111,7 @@ test canvText-3.1 {TextCoords procedure} \
 
 test canvText-3.2 {TextCoords procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "xyz"}} \
+-result {1 {expected screen distance but got "xyz"}} \
 -body {
     .c create text 20 20 -tag test
     list [catch {.c coords test xyz 0} msg] $msg
@@ -119,7 +119,7 @@ test canvText-3.2 {TextCoords procedure} \
 
 test canvText-3.3 {TextCoords procedure} \
 -setup ::tkp_setup \
--result {1 {bad screen distance "xyz"}} \
+-result {1 {expected screen distance but got "xyz"}} \
 -body {
     .c create text 20 20 -tag test
     list [catch {.c coords test 0 xyz} msg] $msg

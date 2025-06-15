@@ -11,7 +11,7 @@
 # of this file, and for a DISCLAIMER OF ALL WARRANTIES.
 #
 
-package require Tcl 8.5
+package require Tcl 9
 package require tcltest 2
 package require Tk ;# This is the Tk test suite; fail early if no Tk!
 package require tkpath ;# Our own package

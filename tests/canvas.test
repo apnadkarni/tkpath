@@ -15,35 +15,35 @@ foreach {testname testinfo} {
 	non-existent {unknown color name "non-existent"}}
     canvas-1.2 {-bg #ff0000 #ff0000
 	non-existent {unknown color name "non-existent"}}
-    canvas-1.3 {-bd 4 4 badValue {bad screen distance "badValue"}}
-    canvas-1.4 {-borderwidth 1.3 1.3 badValue {bad screen distance "badValue"}}
+    canvas-1.3 {-bd 4 4 badValue {expected screen distance but got "badValue"}}
+    canvas-1.4 {-borderwidth 1.3 1.3 badValue {expected screen distance but got "badValue"}}
     canvas-1.5 {-closeenough 24 24.0
 	bogus {expected floating-point number but got "bogus"}}
     canvas-1.6 {-confine true 1 silly {expected boolean value but got "silly"}}
     canvas-1.7 {-cursor arrow arrow badValue {bad cursor spec "badValue"}}
-    canvas-1.8 {-height 2.1 2 x42 {bad screen distance "x42"}}
+    canvas-1.8 {-height 2.1 2 x42 {expected screen distance but got "x42"}}
     canvas-1.9 {-highlightbackground #112233 #112233
 	ugly {unknown color name "ugly"}}
     canvas-1.10 {-highlightcolor #110022 #110022
 	bogus {unknown color name "bogus"}}
     canvas-1.11 {-highlightthickness 18 18
-	badValue {bad screen distance "badValue"}}
+	badValue {expected screen distance but got "badValue"}}
     canvas-1.12 {-insertbackground #110022 #110022
 	bogus {unknown color name "bogus"}}
-    canvas-1.13 {-insertborderwidth 1.3 1 2.6x {bad screen distance "2.6x"}}
+    canvas-1.13 {-insertborderwidth 1.3 1 2.6x {expected screen distance but got "2.6x"}}
     canvas-1.14 {-insertofftime 100 100 3.2 {expected integer but got "3.2"}}
     canvas-1.15 {-insertontime 100 100 3.2 {expected integer but got "3.2"}}
-    canvas-1.16 {-insertwidth 1.3 1 6x {bad screen distance "6x"}}
+    canvas-1.16 {-insertwidth 1.3 1 6x {expected screen distance but got "6x"}}
     canvas-1.17 {-relief groove groove
 	1.5 {bad relief "1.5": must be flat, groove, raised, ridge, solid, or sunken}}
     canvas-1.18 {-selectbackground #110022 #110022
 	bogus {unknown color name "bogus"}}
     canvas-1.19 {-selectborderwidth 1.3 1
-	badValue {bad screen distance "badValue"}}
+	badValue {expected screen distance but got "badValue"}}
     canvas-1.20 {-selectforeground #654321 #654321
 	bogus {unknown color name "bogus"}}
     canvas-1.21 {-takefocus "any string" "any string" {} {}}
-    canvas-1.22 {-width 402 402 xyz {bad screen distance "xyz"}}
+    canvas-1.22 {-width 402 402 xyz {expected screen distance but got "xyz"}}
     canvas-1.23 {-xscrollcommand {Some command} {Some command} {} {}}
     canvas-1.24 {-yscrollcommand {Another command} {Another command} {} {}}
 } {

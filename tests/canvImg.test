@@ -37,7 +37,7 @@ test canvImg-1.3 {options for image items} testImageType {
 test canvImg-1.4 {options for image items} {
     .c delete all
     list [catch {.c create image 50 50 -image unknown -tags i1} msg] $msg
-} {1 {image "unknown" doesn't exist}}
+} {1 {image "unknown" does not exist}}
 test canvImg-1.5 {options for image items} testImageType {
     .c delete all
     .c create image 50 50 -image foo -tags {i1 foo}
@@ -59,10 +59,10 @@ test canvImg-2.3 {CreateImage procedure} {
 } {center {} {}}
 test canvImg-2.4 {CreateImage procedure} {
     list [catch {.c create image xyz 40} msg] $msg
-} {1 {bad screen distance "xyz"}}
+} {1 {expected screen distance but got "xyz"}}
 test canvImg-2.5 {CreateImage procedure} {
     list [catch {.c create image 50 qrs} msg] $msg
-} {1 {bad screen distance "qrs"}}
+} {1 {expected screen distance but got "qrs"}}
 test canvImg-2.6 {CreateImage procedure} testImageType {
     list [catch {.c create image 50 50 -gorp foo} msg] $msg
 } {1 {unknown option "-gorp"}}
