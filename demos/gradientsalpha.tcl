@@ -52,7 +52,7 @@ incr y 60
 
 $w create prect  5 [expr $y - 5] 215 [expr $y + 25] -fill yellow
 $w create prect 10 $y 210 [expr $y + 50] -fill $g4 -fillopacity 0.5
-set mrot    [::tkp::transform rotate [expr 3.1415/4] 410 [expr $y + 25]]
+set mrot    [::tkp::matrix rotate [expr 3.1415/4] 410 [expr $y + 25]]
 $w create prect 310 $y 510 [expr $y + 50] -fill $g4 -matrix $mrot -fillopacity 0.5
 $w create text 220 $y -anchor w -text "rainbow -fillopacity 0.5"
 $w create ptext 420 $y -textanchor w -text "rainbow" -fontsize 50 -fontweight bold -fill $g4

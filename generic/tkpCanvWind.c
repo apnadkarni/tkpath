@@ -9,7 +9,6 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #include <stdio.h>
@@ -39,40 +38,38 @@ typedef struct WindowItem  {
 
 #define PATH_DEF_STATE "normal"
 
-static char *stateStrings[] = {
+static const char *stateStrings[] = {
     "active", "disabled", "normal", "hidden", NULL
 };
 
 static Tk_ObjCustomOption tagsCO = {
-    "tags",			
+    "tags",
     Tk_PathCanvasTagsOptionSetProc,
     Tk_PathCanvasTagsOptionGetProc,
     Tk_PathCanvasTagsOptionRestoreProc,
-    Tk_PathCanvasTagsOptionFreeProc,	
-    (ClientData) NULL			
+    Tk_PathCanvasTagsOptionFreeProc,
+    (ClientData) NULL
 };
 
 static Tk_OptionSpec optionSpecs[] = {
     {TK_OPTION_ANCHOR, "-anchor", NULL, NULL,
-	"center", -1, Tk_Offset(WindowItem, anchor), 0, 0, 0},
-    {TK_OPTION_PIXELS, "-height", NULL, NULL, 
-        "0", -1, Tk_Offset(WindowItem, height), 0, 0, 0},
+	"center", -1, offsetof(WindowItem, anchor), 0, 0, 0},
+    {TK_OPTION_PIXELS, "-height", NULL, NULL,
+        "0", -1, offsetof(WindowItem, height), 0, 0, 0},
     {TK_OPTION_STRING_TABLE, "-state", NULL, NULL,
-        PATH_DEF_STATE, -1, Tk_Offset(Tk_PathItem, state),
-        0, (ClientData) stateStrings, 0},		
+        PATH_DEF_STATE, -1, offsetof(Tk_PathItem, state),
+        0, (ClientData) stateStrings, 0},
     {TK_OPTION_CUSTOM, "-tags", NULL, NULL,
-	NULL, -1, Tk_Offset(Tk_PathItem, pathTagsPtr),
+	NULL, -1, offsetof(Tk_PathItem, pathTagsPtr),
 	TK_OPTION_NULL_OK, (ClientData) &tagsCO, 0},
-    {TK_OPTION_PIXELS, "-width", NULL, NULL, 
-        "0", -1, Tk_Offset(WindowItem, width), 0, 0, 0},
+    {TK_OPTION_PIXELS, "-width", NULL, NULL,
+        "0", -1, offsetof(WindowItem, width), 0, 0, 0},
     {TK_OPTION_WINDOW, "-window", NULL, NULL,
-	NULL, -1, Tk_Offset(WindowItem, tkwin),
+	NULL, -1, offsetof(WindowItem, tkwin),
 	TK_OPTION_NULL_OK, 0, 0},
-    {TK_OPTION_END, NULL, NULL, NULL,           
+    {TK_OPTION_END, NULL, NULL, NULL,
 	NULL, 0, -1, 0, (ClientData) NULL, 0}
 };
-
-static Tk_OptionTable optionTable = NULL;
 
 /*
  * Prototypes for functions defined in this file:
@@ -81,24 +78,27 @@ static Tk_OptionTable optionTable = NULL;
 static void		ComputeWindowBbox(Tk_PathCanvas canvas,
 			    WindowItem *winItemPtr);
 static int		ConfigureWinItem(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
-			    Tcl_Obj *CONST objv[], int flags);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int objc, Tcl_Obj *const objv[], int flags);
 static int		CreateWinItem(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *CONST objv[]);
+			    int objc, Tcl_Obj *const objv[]);
 static void		DeleteWinItem(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayWinItem(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, Display *display, Drawable dst,
+			    Tk_PathItem *itemPtr, Display *display,
+			    Drawable dst,
 			    int x, int y, int width, int height);
 static void		ScaleWinItem(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, double originX, double originY,
+			    Tk_PathItem *itemPtr, int compensate,
+			    double originX, double originY,
 			    double scaleX, double scaleY);
 static void		TranslateWinItem(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, double deltaX, double deltaY);
+			    Tk_PathItem *itemPtr, int compensate,
+			    double deltaX, double deltaY);
 static int		WinItemCoords(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
-			    Tcl_Obj *CONST objv[]);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		WinItemLostSlaveProc(ClientData clientData,
 			    Tk_Window tkwin);
 static void		WinItemRequestProc(ClientData clientData,
@@ -107,8 +107,14 @@ static void		WinItemStructureProc(ClientData clientData,
 			    XEvent *eventPtr);
 static int		WinItemToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
+static int		WinItemToPdf(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int objc, Tcl_Obj *const objv[], int prepass);
+#ifndef TKP_NO_POSTSCRIPT
 static int		WinItemToPostscript(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int prepass);
+#endif
 static double		WinItemToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *pointPtr);
 #ifdef X_GetImage
@@ -136,7 +142,10 @@ Tk_PathItemType tkWindowType = {
     NULL,			/* bboxProc */
     WinItemToPoint,		/* pointProc */
     WinItemToArea,		/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     WinItemToPostscript,	/* postscriptProc */
+#endif
+    WinItemToPdf,		/* pdfProc */
     ScaleWinItem,		/* scaleProc */
     TranslateWinItem,		/* translateProc */
     NULL,			/* indexProc */
@@ -184,10 +193,11 @@ CreateWinItem(
     Tk_PathItem *itemPtr,		/* Record to hold new item; header has been
 				 * initialized by caller. */
     int objc,			/* Number of arguments in objv. */
-    Tcl_Obj *CONST objv[])	/* Arguments describing window. */
+    Tcl_Obj *const objv[])	/* Arguments describing window. */
 {
     WindowItem *winItemPtr = (WindowItem *) itemPtr;
     int i;
+    Tk_OptionTable optionTable;
 
     if (objc == 0) {
 	Tcl_Panic("canvas did not pass any coords\n");
@@ -203,11 +213,9 @@ CreateWinItem(
     winItemPtr->anchor = TK_ANCHOR_CENTER;
     winItemPtr->canvas = canvas;
 
-    if (optionTable == NULL) {
-	optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) winItemPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) winItemPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -262,8 +270,8 @@ WinItemCoords(
     Tk_PathCanvas canvas,		/* Canvas containing item. */
     Tk_PathItem *itemPtr,		/* Item whose coordinates are to be read or
 				 * modified. */
-    int objc,			/* Number of coordinates supplied in objv. */
-    Tcl_Obj *CONST objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
+    Tcl_Size objc,			/* Number of coordinates supplied in objv. */
+    Tcl_Obj *const objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
 {
     WindowItem *winItemPtr = (WindowItem *) itemPtr;
 
@@ -282,7 +290,7 @@ WinItemCoords(
 	    } else if (objc != 2) {
 		char buf[64 + TCL_INTEGER_SPACE];
 
-		sprintf(buf, "wrong # coordinates: expected 2, got %d", objc);
+		sprintf(buf, "wrong # coordinates: expected 2, got %ld", objc);
 		Tcl_SetResult(interp, buf, TCL_VOLATILE);
 		return TCL_ERROR;
 	    }
@@ -296,7 +304,7 @@ WinItemCoords(
     } else {
 	char buf[64 + TCL_INTEGER_SPACE];
 
-	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %d", objc);
+	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %ld", objc);
 	Tcl_SetResult(interp, buf, TCL_VOLATILE);
 	return TCL_ERROR;
     }
@@ -327,7 +335,7 @@ ConfigureWinItem(
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Window item to reconfigure. */
     int objc,			/* Number of elements in objv.  */
-    Tcl_Obj *CONST objv[],	/* Arguments describing things to configure. */
+    Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
     WindowItem *winItemPtr = (WindowItem *) itemPtr;
@@ -336,7 +344,8 @@ ConfigureWinItem(
 
     oldWindow = winItemPtr->tkwin;
     canvasTkwin = Tk_PathCanvasTkwin(canvas);
-    if (TCL_OK != Tk_SetOptions(interp, (char *) winItemPtr, optionTable, 
+    if (TCL_OK != Tk_SetOptions(interp, (char *) winItemPtr,
+	    itemPtr->optionTable,
 	    objc, objv, canvasTkwin, NULL, NULL)) {
 	return TCL_ERROR;
     }
@@ -440,7 +449,8 @@ DeleteWinItem(
 	}
 	Tk_UnmapWindow(winItemPtr->tkwin);
     }
-    Tk_FreeConfigOptions((char *) itemPtr, optionTable, Tk_PathCanvasTkwin(canvas));
+    Tk_FreeConfigOptions((char *) itemPtr, itemPtr->optionTable,
+			 Tk_PathCanvasTkwin(canvas));
 }
 
 /*
@@ -544,6 +554,8 @@ ComputeWindowBbox(
 	x -= width/2;
 	y -= height/2;
 	break;
+    case TK_ANCHOR_NULL:
+	break;
     }
 
     /*
@@ -605,7 +617,7 @@ DisplayWinItem(
      * A drawable of None is used by the canvas UnmapNotify handler
      * to indicate that we should no longer display ourselves.
      */
-    if (state == TK_PATHSTATE_HIDDEN || drawable == None) {
+    if (state == TK_PATHSTATE_HIDDEN || drawable == (Tcl_Size) NULL) {
 	if (canvasTkwin == Tk_Parent(winItemPtr->tkwin)) {
 	    Tk_UnmapWindow(winItemPtr->tkwin);
 	} else {
@@ -785,6 +797,40 @@ xerrorhandler(
 /*
  *--------------------------------------------------------------
  *
+ * WinItemToPdf --
+ *
+ *	This function is called to generate Pdf for window items.
+ *
+ * Results:
+ *	The return value is a standard Tcl result. If an error occurs in
+ *	generating Pdf then an error message is left in interp->result,
+ *	replacing whatever used to be there. If no error occurs, then
+ *	Pdf for the item is appended to the result.
+ *
+ * Side effects:
+ *	None.
+ *
+ *--------------------------------------------------------------
+ */
+
+static int
+WinItemToPdf(
+    Tcl_Interp *interp,		/* Leave Pdf or error message here. */
+    Tk_PathCanvas canvas,	/* Information about overall canvas. */
+    Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
+    int objc,                   /* Number of arguments. */
+    Tcl_Obj *const objv[],      /* Argument list. */
+    int prepass)		/* 1 means this is a prepass to collect font
+				 * information; 0 means final Pdf is
+				 * being created. */
+{
+    return TCL_OK;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
+/*
+ *--------------------------------------------------------------
+ *
  * WinItemToPostscript --
  *
  *	This function is called to generate Postscript for window items.
@@ -841,6 +887,7 @@ WinItemToPostscript(
     case TK_ANCHOR_SW:						    break;
     case TK_ANCHOR_W:			    y -= height/2.0;	    break;
     case TK_ANCHOR_CENTER:  x -= width/2.0; y -= height/2.0;	    break;
+    case TK_ANCHOR_NULL:                                            break;
     }
 
     return CanvasPsWindow(interp, tkwin, canvas, x, y, width, height);
@@ -926,6 +973,7 @@ CanvasPsWindow(
     XDestroyImage(ximage);
     return result;
 }
+#endif
 
 /*
  *--------------------------------------------------------------
@@ -950,6 +998,7 @@ static void
 ScaleWinItem(
     Tk_PathCanvas canvas,		/* Canvas containing window. */
     Tk_PathItem *itemPtr,		/* Window to be scaled. */
+    int compensate,			/* Unused. */
     double originX, double originY,
 				/* Origin about which to scale window. */
     double scaleX,		/* Amount to scale in X direction. */
@@ -989,6 +1038,7 @@ static void
 TranslateWinItem(
     Tk_PathCanvas canvas,		/* Canvas containing item. */
     Tk_PathItem *itemPtr,		/* Item that is being moved. */
+    int compensate,			/* Unused. */
     double deltaX, double deltaY)
 				/* Amount by which item is to be moved. */
 {

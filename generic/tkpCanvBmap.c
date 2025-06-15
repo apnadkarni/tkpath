@@ -9,7 +9,6 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #include <stdio.h>
@@ -45,96 +44,102 @@ typedef struct BitmapItem  {
  * default strings, be sure to change the corresponding default values in
  * CreateLine.
  */
- 
+
 #define PATH_DEF_STATE "normal"
 
 /* These MUST be kept in sync with enums! X.h */
 
-static char *stateStrings[] = {
+static const char *stateStrings[] = {
     "active", "disabled", "normal", "hidden", NULL
 };
 
 static Tk_ObjCustomOption tagsCO = {
-    "tags",			
+    "tags",
     Tk_PathCanvasTagsOptionSetProc,
     Tk_PathCanvasTagsOptionGetProc,
     Tk_PathCanvasTagsOptionRestoreProc,
-    Tk_PathCanvasTagsOptionFreeProc,	
-    (ClientData) NULL			
+    Tk_PathCanvasTagsOptionFreeProc,
+    (ClientData) NULL
 };
 
 static Tk_OptionSpec optionSpecs[] = {
     {TK_OPTION_COLOR, "-activebackground", NULL, NULL,
-	NULL, -1, Tk_Offset(BitmapItem, activeBgColor), 
+	NULL, -1, offsetof(BitmapItem, activeBgColor),
 	TK_OPTION_NULL_OK, 0, 0},
-    {TK_OPTION_BITMAP, "-activebitmap", NULL, NULL, 
-        NULL, -1, Tk_Offset(BitmapItem, activeBitmap), 
+    {TK_OPTION_BITMAP, "-activebitmap", NULL, NULL,
+        NULL, -1, offsetof(BitmapItem, activeBitmap),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_COLOR, "-activeforeground", NULL, NULL,
-	NULL, -1, Tk_Offset(BitmapItem, activeFgColor), 
+	NULL, -1, offsetof(BitmapItem, activeFgColor),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_ANCHOR, "-anchor", NULL, NULL,
-	"center", -1, Tk_Offset(BitmapItem, anchor), 0, 0, 0},
+	"center", -1, offsetof(BitmapItem, anchor), 0, 0, 0},
     {TK_OPTION_COLOR, "-background", NULL, NULL,
-	NULL, -1, Tk_Offset(BitmapItem, bgColor), 
+	NULL, -1, offsetof(BitmapItem, bgColor),
 	TK_OPTION_NULL_OK, 0, 0},
-    {TK_OPTION_BITMAP, "-bitmap", NULL, NULL, 
-        NULL, -1, Tk_Offset(BitmapItem, bitmap), 
+    {TK_OPTION_BITMAP, "-bitmap", NULL, NULL,
+        NULL, -1, offsetof(BitmapItem, bitmap),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_COLOR, "-disabledbackground", NULL, NULL,
-	NULL, -1, Tk_Offset(BitmapItem, disabledBgColor), 
+	NULL, -1, offsetof(BitmapItem, disabledBgColor),
 	TK_OPTION_NULL_OK, 0, 0},
-    {TK_OPTION_BITMAP, "-disabledbitmap", NULL, NULL, 
-        NULL, -1, Tk_Offset(BitmapItem, disabledBitmap), 
+    {TK_OPTION_BITMAP, "-disabledbitmap", NULL, NULL,
+        NULL, -1, offsetof(BitmapItem, disabledBitmap),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_COLOR, "-disabledforeground", NULL, NULL,
-	NULL, -1, Tk_Offset(BitmapItem, disabledFgColor), 
+	NULL, -1, offsetof(BitmapItem, disabledFgColor),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_COLOR, "-foreground", NULL, NULL,
-	"black", -1, Tk_Offset(BitmapItem, fgColor), 
+	"black", -1, offsetof(BitmapItem, fgColor),
 	0, 0, 0},
     {TK_OPTION_STRING_TABLE, "-state", NULL, NULL,
-        PATH_DEF_STATE, -1, Tk_Offset(Tk_PathItem, state),
-        0, (ClientData) stateStrings, 0},		
+        PATH_DEF_STATE, -1, offsetof(Tk_PathItem, state),
+        0, (ClientData) stateStrings, 0},
     {TK_OPTION_CUSTOM, "-tags", NULL, NULL,
-	NULL, -1, Tk_Offset(Tk_PathItem, pathTagsPtr),
+	NULL, -1, offsetof(Tk_PathItem, pathTagsPtr),
 	TK_OPTION_NULL_OK, (ClientData) &tagsCO, 0},
-    {TK_OPTION_END, NULL, NULL, NULL,           
+    {TK_OPTION_END, NULL, NULL, NULL,
 	NULL, 0, -1, 0, (ClientData) NULL, 0}
 };
-
-static Tk_OptionTable optionTable = NULL;
 
 /*
  * Prototypes for functions defined in this file:
  */
 
 static int		BitmapCoords(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
-			    Tcl_Obj *CONST objv[]);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
+			    Tcl_Obj *const objv[]);
 static int		BitmapToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
+static int		BitmapToPdf(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int objc, Tcl_Obj *const objv[], int prepass);
 static double		BitmapToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *coordPtr);
+#ifndef TKP_NO_POSTSCRIPT
 static int		BitmapToPostscript(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int prepass);
+#endif
 static void		ComputeBitmapBbox(Tk_PathCanvas canvas,
 			    BitmapItem *bmapPtr);
 static int		ConfigureBitmap(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
-			    Tcl_Obj *CONST objv[], int flags);
-static int		TkcCreateBitmap(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *CONST objv[]);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int objc, Tcl_Obj *const objv[], int flags);
 static void		DeleteBitmap(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayBitmap(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, Display *display, Drawable dst,
+			    Tk_PathItem *itemPtr, Display *display,
+			    Drawable dst,
 			    int x, int y, int width, int height);
-static void		ScaleBitmap(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, double originX, double originY,
+static void		ScaleBitmap(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int compensate, double originX, double originY,
 			    double scaleX, double scaleY);
-static void		TranslateBitmap(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+static int		TkcCreateBitmap(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
+			    int objc, Tcl_Obj *const objv[]);
+static void		TranslateBitmap(Tk_PathCanvas canvas,
+			    Tk_PathItem *itemPtr, int compensate,
 			    double deltaX, double deltaY);
 
 /*
@@ -155,7 +160,10 @@ Tk_PathItemType tkBitmapType = {
     NULL,			/* bboxProc */
     BitmapToPoint,		/* pointProc */
     BitmapToArea,		/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     BitmapToPostscript,		/* postscriptProc */
+#endif
+    BitmapToPdf,		/* pdfProc */
     ScaleBitmap,		/* scaleProc */
     TranslateBitmap,		/* translateProc */
     NULL,			/* indexProc */
@@ -192,10 +200,11 @@ TkcCreateBitmap(
     Tk_PathItem *itemPtr,		/* Record to hold new item; header has been
 				 * initialized by caller. */
     int objc,			/* Number of arguments in objv. */
-    Tcl_Obj *CONST objv[])	/* Arguments describing rectangle. */
+    Tcl_Obj *const objv[])	/* Arguments describing rectangle. */
 {
     BitmapItem *bmapPtr = (BitmapItem *) itemPtr;
     int i;
+    Tk_OptionTable optionTable;
 
     if (objc == 0) {
 	Tcl_Panic("canvas did not pass any coords\n");
@@ -206,22 +215,20 @@ TkcCreateBitmap(
      */
 
     bmapPtr->anchor = TK_ANCHOR_CENTER;
-    bmapPtr->bitmap = None;
-    bmapPtr->activeBitmap = None;
-    bmapPtr->disabledBitmap = None;
+    bmapPtr->bitmap = (Tcl_Size) NULL;
+    bmapPtr->activeBitmap = (Tcl_Size) NULL;
+    bmapPtr->disabledBitmap = (Tcl_Size) NULL;
     bmapPtr->fgColor = NULL;
     bmapPtr->activeFgColor = NULL;
     bmapPtr->disabledFgColor = NULL;
     bmapPtr->bgColor = NULL;
     bmapPtr->activeBgColor = NULL;
     bmapPtr->disabledBgColor = NULL;
-    bmapPtr->gc = None;
+    bmapPtr->gc = NULL;
 
-    if (optionTable == NULL) {
-	optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) bmapPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) bmapPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -276,8 +283,8 @@ BitmapCoords(
     Tk_PathCanvas canvas,		/* Canvas containing item. */
     Tk_PathItem *itemPtr,		/* Item whose coordinates are to be read or
 				 * modified. */
-    int objc,			/* Number of coordinates supplied in objv. */
-    Tcl_Obj *CONST objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
+    Tcl_Size objc,			/* Number of coordinates supplied in objv. */
+    Tcl_Obj *const objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
 {
     BitmapItem *bmapPtr = (BitmapItem *) itemPtr;
 
@@ -297,7 +304,7 @@ BitmapCoords(
 	    } else if (objc != 2) {
 		char buf[64 + TCL_INTEGER_SPACE];
 
-		sprintf(buf, "wrong # coordinates: expected 2, got %d", objc);
+		sprintf(buf, "wrong # coordinates: expected 2, got %ld", objc);
 		Tcl_SetResult(interp, buf, TCL_VOLATILE);
 		return TCL_ERROR;
 	    }
@@ -312,7 +319,7 @@ BitmapCoords(
     } else {
 	char buf[64 + TCL_INTEGER_SPACE];
 
-	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %d", objc);
+	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %ld", objc);
 	Tcl_SetResult(interp, buf, TCL_VOLATILE);
 	return TCL_ERROR;
     }
@@ -343,7 +350,7 @@ ConfigureBitmap(
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Bitmap item to reconfigure. */
     int objc,			/* Number of elements in objv.  */
-    Tcl_Obj *CONST objv[],	/* Arguments describing things to configure. */
+    Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
     BitmapItem *bmapPtr = (BitmapItem *) itemPtr;
@@ -357,7 +364,7 @@ ConfigureBitmap(
     Tk_PathState state;
 
     tkwin = Tk_PathCanvasTkwin(canvas);
-    if (TCL_OK != Tk_SetOptions(interp, (char *) bmapPtr, optionTable, 
+    if (TCL_OK != Tk_SetOptions(interp, (char *) bmapPtr, itemPtr->optionTable,
 	    objc, objv, tkwin, NULL, NULL)) {
 	return TCL_ERROR;
     }
@@ -371,7 +378,7 @@ ConfigureBitmap(
 
     if (bmapPtr->activeFgColor!=NULL ||
 	    bmapPtr->activeBgColor!=NULL ||
-	    bmapPtr->activeBitmap!=None) {
+	    bmapPtr->activeBitmap!=(Tcl_Size) NULL) {
 	itemPtr->redraw_flags |= TK_ITEM_STATE_DEPENDANT;
     } else {
 	itemPtr->redraw_flags &= ~TK_ITEM_STATE_DEPENDANT;
@@ -394,7 +401,7 @@ ConfigureBitmap(
 	if (bmapPtr->activeBgColor!=NULL) {
 	    bgColor = bmapPtr->activeBgColor;
 	}
-	if (bmapPtr->activeBitmap!=None) {
+	if (bmapPtr->activeBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->activeBitmap;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
@@ -404,13 +411,13 @@ ConfigureBitmap(
 	if (bmapPtr->disabledBgColor!=NULL) {
 	    bgColor = bmapPtr->disabledBgColor;
 	}
-	if (bmapPtr->disabledBitmap!=None) {
+	if (bmapPtr->disabledBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->disabledBitmap;
 	}
     }
 
-    if (bitmap == None) {
-	newGC = None;
+    if (bitmap == (Tcl_Size) NULL) {
+	newGC = NULL;
     } else {
 	gcValues.foreground = fgColor->pixel;
 	mask = GCForeground;
@@ -423,7 +430,7 @@ ConfigureBitmap(
 	}
 	newGC = Tk_GetGC(tkwin, mask, &gcValues);
     }
-    if (bmapPtr->gc != None) {
+    if (bmapPtr->gc != NULL) {
 	Tk_FreeGC(Tk_Display(tkwin), bmapPtr->gc);
     }
     bmapPtr->gc = newGC;
@@ -455,7 +462,8 @@ DeleteBitmap(
     Tk_PathItem *itemPtr,		/* Item that is being deleted. */
     Display *display)		/* Display containing window for canvas. */
 {
-    Tk_FreeConfigOptions((char *) itemPtr, optionTable, Tk_PathCanvasTkwin(canvas));
+    Tk_FreeConfigOptions((char *) itemPtr, itemPtr->optionTable,
+			 Tk_PathCanvasTkwin(canvas));
 }
 
 /*
@@ -491,11 +499,11 @@ ComputeBitmapBbox(
     }
     bitmap = bmapPtr->bitmap;
     if (((TkPathCanvas *)canvas)->currentItemPtr == (Tk_PathItem *)bmapPtr) {
-	if (bmapPtr->activeBitmap!=None) {
+	if (bmapPtr->activeBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->activeBitmap;
 	}
-    } else if (state==TK_PATHSTATE_DISABLED) {
-	if (bmapPtr->disabledBitmap!=None) {
+    } else if (state == TK_PATHSTATE_DISABLED) {
+	if (bmapPtr->disabledBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->disabledBitmap;
 	}
     }
@@ -503,7 +511,7 @@ ComputeBitmapBbox(
     x = (int) (bmapPtr->x + ((bmapPtr->x >= 0) ? 0.5 : - 0.5));
     y = (int) (bmapPtr->y + ((bmapPtr->y >= 0) ? 0.5 : - 0.5));
 
-    if (state==TK_PATHSTATE_HIDDEN || bitmap == None) {
+    if ((state == TK_PATHSTATE_HIDDEN) || (bitmap == (Tcl_Size) NULL)) {
 	bmapPtr->header.x1 = bmapPtr->header.x2 = x;
 	bmapPtr->header.y1 = bmapPtr->header.y2 = y;
 	return;
@@ -545,6 +553,8 @@ ComputeBitmapBbox(
     case TK_ANCHOR_CENTER:
 	x -= width/2;
 	y -= height/2;
+	break;
+    case TK_ANCHOR_NULL:
 	break;
     }
 
@@ -601,16 +611,16 @@ DisplayBitmap(
     }
     bitmap = bmapPtr->bitmap;
     if (((TkPathCanvas *)canvas)->currentItemPtr == itemPtr) {
-	if (bmapPtr->activeBitmap!=None) {
+	if (bmapPtr->activeBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->activeBitmap;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
-	if (bmapPtr->disabledBitmap!=None) {
+	if (bmapPtr->disabledBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->disabledBitmap;
 	}
     }
 
-    if (bitmap != None) {
+    if (bitmap != (Tcl_Size) NULL) {
 	if (x > bmapPtr->header.x1) {
 	    bmapX = x - bmapPtr->header.x1;
 	    bmapWidth = bmapPtr->header.x2 - x;
@@ -781,6 +791,7 @@ static void
 ScaleBitmap(
     Tk_PathCanvas canvas,		/* Canvas containing rectangle. */
     Tk_PathItem *itemPtr,		/* Rectangle to be scaled. */
+    int compensate,			/* Unused. */
     double originX, double originY,
 				/* Origin about which to scale item. */
     double scaleX,		/* Amount to scale in X direction. */
@@ -814,6 +825,7 @@ static void
 TranslateBitmap(
     Tk_PathCanvas canvas,		/* Canvas containing item. */
     Tk_PathItem *itemPtr,		/* Item that is being moved. */
+    int compensate,			/* Unused. */
     double deltaX, double deltaY)
 				/* Amount by which item is to be moved. */
 {
@@ -824,6 +836,40 @@ TranslateBitmap(
     ComputeBitmapBbox(canvas, bmapPtr);
 }
 
+/*
+ *--------------------------------------------------------------
+ *
+ * BitmapToPdf --
+ *
+ *	This function is called to generate Pdf for bitmap items.
+ *
+ * Results:
+ *	The return value is a standard Tcl result. If an error occurs in
+ *	generating Pdf then an error message is left in the interp's
+ *	result, replacing whatever used to be there. If no error occurs, then
+ *	Pdf for the item is appended to the result.
+ *
+ * Side effects:
+ *	None.
+ *
+ *--------------------------------------------------------------
+ */
+
+static int
+BitmapToPdf(
+    Tcl_Interp *interp,		/* Leave Pdf or error message here. */
+    Tk_PathCanvas canvas,	/* Information about overall canvas. */
+    Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
+    int objc,                   /* Number of arguments. */
+    Tcl_Obj *const objv[],      /* Argument list. */
+    int prepass)		/* 1 means this is a prepass to collect font
+				 * information; 0 means final Pdf is
+				 * being created. */
+{
+    return TCL_OK;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
 /*
  *--------------------------------------------------------------
  *
@@ -875,7 +921,7 @@ BitmapToPostscript(
 	if (bmapPtr->activeBgColor!=NULL) {
 	    bgColor = bmapPtr->activeBgColor;
 	}
-	if (bmapPtr->activeBitmap!=None) {
+	if (bmapPtr->activeBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->activeBitmap;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
@@ -885,12 +931,12 @@ BitmapToPostscript(
 	if (bmapPtr->disabledBgColor!=NULL) {
 	    bgColor = bmapPtr->disabledBgColor;
 	}
-	if (bmapPtr->disabledBitmap!=None) {
+	if (bmapPtr->disabledBitmap!=(Tcl_Size) NULL) {
 	    bitmap = bmapPtr->disabledBitmap;
 	}
     }
 
-    if (bitmap == None) {
+    if (bitmap == (Tcl_Size) NULL) {
 	return TCL_OK;
     }
 
@@ -913,6 +959,7 @@ BitmapToPostscript(
     case TK_ANCHOR_SW:						break;
     case TK_ANCHOR_W:			   y -= height/2.0;	break;
     case TK_ANCHOR_CENTER: x -= width/2.0; y -= height/2.0;	break;
+    case TK_ANCHOR_NULL:                                        break;
     }
 
     /*
@@ -970,6 +1017,7 @@ BitmapToPostscript(
     }
     return TCL_OK;
 }
+#endif
 
 /*
  * Local Variables:

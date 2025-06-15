@@ -15,11 +15,11 @@ $w create pimage $x $y -image $name
 $w create prect $x $y \
   [expr $x+[image width $name]] [expr $y+[image height $name]]
 
-set m [::tkp::transform scale 4 4]
+set m [::tkp::matrix scale 4 4]
 $w create pimage 100 0 -image $name -matrix $m -interpolation none
 
-set m [::tkp::transform scale 4 4]
+set m [::tkp::matrix scale 4 4]
 $w create pimage 0 100 -image $name -matrix $m -interpolation fast
 
-set m [::tkp::transform scale 4 4]
+set m [::tkp::matrix scale 4 4]
 $w create pimage 100 100 -image $name -matrix $m -interpolation best

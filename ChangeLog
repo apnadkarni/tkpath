@@ -241,6 +241,8 @@
         scaling matrices applied to them (the same solves scale
         calls and potentially ensuing artifacts as well)
         * adapted all objects to reflect aforesaid change
+	* merged patch by Sean McKnight found at:
+        https://sourceforge.net/p/tclbitprint/patches/3/
 
 2012-07-04  George Petasis  <petasis@iit.demokritos.gr>
 
@@ -250,6 +252,7 @@
 	* tclconfig/tcl.m4:
 	* configure, configure.in: Updated to TEA 3.9.
 	* generic/*.c: Various fixes for mingw32/mingw64.
+	* configure, configure.in: Bumped revision to 0.3.3
 
 2011-10-28  Peter Spjuth  <peter.spjuth@gmail.com>
 

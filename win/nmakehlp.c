@@ -10,8 +10,6 @@
  * of this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
  * ----------------------------------------------------------------------------
- * RCS: @(#) $Id$
- * ----------------------------------------------------------------------------
  */
 
 #define _CRT_SECURE_NO_DEPRECATE
@@ -264,9 +262,9 @@ CheckForCompilerFeature(
     {
 	DWORD err = 0;
 	lstrcat(cmdline, "\n");
-	WriteFile(GetStdHandle(STD_ERROR_HANDLE), cmdline, 
+	WriteFile(GetStdHandle(STD_ERROR_HANDLE), cmdline,
 	    lstrlen(cmdline), &err, NULL);
-	WriteFile(GetStdHandle(STD_ERROR_HANDLE), Out.buffer, 
+	WriteFile(GetStdHandle(STD_ERROR_HANDLE), Out.buffer,
 	    lstrlen(Out.buffer), &err,NULL);
 	WriteFile(GetStdHandle(STD_ERROR_HANDLE), Err.buffer,
 	    lstrlen(Err.buffer), &err,NULL);
@@ -487,7 +485,7 @@ int
 GetVersionFromHeader(const char *tclh, const char *tkh)
 {
     double dTcl = 0.0, dTk = 0.0;
-    
+
     if (tclh != NULL)
 	dTcl = ReadVersionFromHeader(tclh, "TCL_VERSION");
     if (tkh != NULL)

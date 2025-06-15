@@ -5,7 +5,6 @@
  *
  * Copyright (c) 2007-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #ifndef INCLUDED_TKCANVPATHUTIL_H
@@ -17,45 +16,69 @@
 extern "C" {
 #endif
 
-int	    CoordsForPointItems(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-                    double *pointPtr, int objc, Tcl_Obj *CONST objv[]);
-int	    CoordsForRectangularItems(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-                    PathRect *rectPtr, int objc, Tcl_Obj *CONST objv[]);
-PathRect    GetGenericBarePathBbox(PathAtom *atomPtr);
-PathRect    GetGenericPathTotalBboxFromBare(PathAtom *atomPtr, Tk_PathStyle *stylePtr, PathRect *bboxPtr);
-void	    SetGenericPathHeaderBbox(Tk_PathItem *headerPtr, TMatrix *mPtr,
-                    PathRect *totalBboxPtr);
-TMatrix	    GetCanvasTMatrix(Tk_PathCanvas canvas);
-PathRect    NewEmptyPathRect(void);
-int	    IsPathRectEmpty(PathRect *r);
-void	    IncludePointInRect(PathRect *r, double x, double y);
-double	    GenericPathToPoint(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tk_PathStyle *stylePtr,
-		    PathAtom *atomPtr, int maxNumSegments, double *pointPtr);
-int	    GenericPathToArea(Tk_PathCanvas canvas,	Tk_PathItem *itemPtr, Tk_PathStyle *stylePtr,
-                    PathAtom * atomPtr, int maxNumSegments, double *areaPtr);
-void	    TranslatePathAtoms(PathAtom *atomPtr, double deltaX, double deltaY);
-void	    ScalePathAtoms(PathAtom *atomPtr, double originX, double originY,
-                    double scaleX, double scaleY);
-void	    TranslatePathRect(PathRect *r, double deltaX, double deltaY);
-void	    ScalePathRect(PathRect *r, double originX, double originY,
-		    double scaleX, double scaleY);
-void	    TranslateItemHeader(Tk_PathItem *itemPtr, double deltaX, double deltaY);
-void	    ScaleItemHeader(Tk_PathItem *itemPtr, double originX, double originY,
-		    double scaleX, double scaleY);
+MODULE_SCOPE int	CoordsForPointItems(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas,
+			    double *pointPtr, Tcl_Size objc, Tcl_Obj *const objv[]);
+MODULE_SCOPE int	CoordsForRectangularItems(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas,
+			    PathRect *rectPtr, Tcl_Size objc, Tcl_Obj *const objv[]);
+MODULE_SCOPE PathRect	GetGenericBarePathBbox(PathAtom *atomPtr);
+MODULE_SCOPE PathRect	GetGenericPathTotalBboxFromBare(PathAtom *atomPtr,
+			    Tk_PathStyle *stylePtr, PathRect *bboxPtr);
+MODULE_SCOPE void	SetGenericPathHeaderBbox(Tk_PathItem *headerPtr,
+			    TMatrix *mPtr, PathRect *totalBboxPtr);
+MODULE_SCOPE TMatrix	GetCanvasTMatrix(Tk_PathCanvas canvas);
+MODULE_SCOPE PathRect	NewEmptyPathRect(void);
+MODULE_SCOPE int	IsPathRectEmpty(PathRect *r);
+MODULE_SCOPE void	IncludePointInRect(PathRect *r, double x, double y);
+MODULE_SCOPE double	GenericPathToPoint(Tk_PathCanvas canvas,
+			    Tk_PathItem *itemPtr, Tk_PathStyle *stylePtr,
+			    PathAtom *atomPtr, int maxNumSegments,
+			    double *pointPtr);
+MODULE_SCOPE int	GenericPathToArea(Tk_PathCanvas canvas,
+			    Tk_PathItem *itemPtr, Tk_PathStyle *stylePtr,
+			    PathAtom * atomPtr, int maxNumSegments,
+			    double *areaPtr);
+MODULE_SCOPE void	TranslatePathAtoms(PathAtom *atomPtr, double deltaX,
+			    double deltaY);
+MODULE_SCOPE void	ScalePathAtoms(PathAtom *atomPtr, double originX,
+			    double originY, double scaleX, double scaleY);
+MODULE_SCOPE void	TranslatePathRect(PathRect *r, double deltaX,
+			    double deltaY);
+MODULE_SCOPE void	ScalePathRect(PathRect *r, double originX,
+			    double originY, double scaleX, double scaleY);
+MODULE_SCOPE void	TranslateItemHeader(Tk_PathItem *itemPtr,
+			    double deltaX, double deltaY);
+MODULE_SCOPE void	ScaleItemHeader(Tk_PathItem *itemPtr, double originX,
+			    double originY, double scaleX, double scaleY);
+MODULE_SCOPE void	CompensateTranslate(Tk_PathItem *itemPtr, int compensate,
+			    double *deltaX, double *deltaY);
+MODULE_SCOPE void	CompensateScale(Tk_PathItem *itemPtr, int compensate,
+			    double *originX, double *originY,
+			    double *scaleX, double *scaleY);
 
 /*
  * The canvas 'Area' and 'Point' functions.
  */
-int	PathPolyLineToArea(double *polyPtr, int numPoints, register double *rectPtr);
-double	PathThickPolygonToPoint(int joinStyle, int capStyle, double width, 
-			int isclosed, double *polyPtr, int numPoints, double *pointPtr);
-double	PathPolygonToPointEx(double *polyPtr, int numPoints, double *pointPtr, 
-			int *intersectionsPtr, int *nonzerorulePtr);
-double	PathRectToPoint(double rectPtr[], double width, int filled, double pointPtr[]);
-int	PathRectToArea(double rectPtr[], double width, int filled, double *areaPtr);
-int	PathRectToAreaWithMatrix(PathRect bbox, TMatrix *mPtr, double *areaPtr);
-double PathRectToPointWithMatrix(PathRect bbox, TMatrix *mPtr, double *pointPtr);
 
+MODULE_SCOPE int	PathPolyLineToArea(double *polyPtr, int numPoints,
+			    double *rectPtr);
+MODULE_SCOPE double	PathThickPolygonToPoint(int joinStyle, int capStyle,
+			    double width, int isclosed, double *polyPtr,
+			    int numPoints, double *pointPtr);
+MODULE_SCOPE double	PathPolygonToPointEx(double *polyPtr, int numPoints,
+			    double *pointPtr, int *intersectionsPtr,
+			    int *nonzerorulePtr);
+MODULE_SCOPE double	PathRectToPoint(double rectPtr[], double width,
+			    int filled, double pointPtr[]);
+MODULE_SCOPE int	PathRectToArea(double rectPtr[], double width,
+			    int filled, double *areaPtr);
+MODULE_SCOPE int	PathRectToAreaWithMatrix(PathRect bbox, TMatrix *mPtr,
+			    double *areaPtr);
+MODULE_SCOPE double	PathRectToPointWithMatrix(PathRect bbox, TMatrix *mPtr,
+			    double *pointPtr);
+MODULE_SCOPE void	CurveSegments(double control[], int includeFirst,
+			    int numSteps, double *coordPtr);
 
 /*
  * New API option parsing.
@@ -66,7 +89,7 @@ double PathRectToPointWithMatrix(PathRect bbox, TMatrix *mPtr, double *pointPtr)
 /* These MUST be kept in sync with Tk_PathState! */
 
 #define PATH_OPTION_STRING_TABLES_STATE				    \
-    static char *stateStrings[] = {				    \
+    static const char *stateStrings[] = {			    \
 	"active", "disabled", "normal", "hidden", NULL		    \
     };
 
@@ -82,18 +105,18 @@ double PathRectToPointWithMatrix(PathRect bbox, TMatrix *mPtr, double *pointPtr)
 
 #define PATH_OPTION_SPEC_PARENT					    \
     {TK_OPTION_STRING, "-parent", NULL, NULL,			    \
-        "0", Tk_Offset(Tk_PathItem, parentObj), -1,		    \
+        "0", offsetof(Tk_PathItem, parentObj), -1,		    \
 	0, 0, PATH_CORE_OPTION_PARENT}
 
 #define PATH_OPTION_SPEC_CORE(typeName)				    \
     {TK_OPTION_STRING_TABLE, "-state", NULL, NULL,		    \
-        PATH_DEF_STATE, -1, Tk_Offset(Tk_PathItem, state),	    \
+        PATH_DEF_STATE, -1, offsetof(Tk_PathItem, state),	    \
         0, (ClientData) stateStrings, 0},			    \
     {TK_OPTION_STRING, "-style", (char *) NULL, (char *) NULL,	    \
-	"", Tk_Offset(typeName, styleObj), -1,			    \
+	"", offsetof(typeName, styleObj), -1,			    \
 	TK_OPTION_NULL_OK, 0, PATH_CORE_OPTION_STYLENAME},	    \
     {TK_OPTION_CUSTOM, "-tags", NULL, NULL,			    \
-	NULL, -1, Tk_Offset(Tk_PathItem, pathTagsPtr),		    \
+	NULL, -1, offsetof(Tk_PathItem, pathTagsPtr),		    \
 	TK_OPTION_NULL_OK, (ClientData) &tagsCO, PATH_CORE_OPTION_TAGS}
 
 
@@ -101,5 +124,12 @@ double PathRectToPointWithMatrix(PathRect bbox, TMatrix *mPtr, double *pointPtr)
 }
 #endif
 
-#endif      // INCLUDED_TKCANVPATHUTIL_H
-
+#endif      /* INCLUDED_TKCANVPATHUTIL_H */
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

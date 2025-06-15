@@ -5,7 +5,6 @@
  *
  * Copyright (c) 2005-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include <float.h>
@@ -51,11 +50,11 @@ TkPathMakePrectAtoms(double *pointsPtr, double rx, double ry, PathAtom **atomPtr
         ry = rx;
     }
     if (round) {
-        
+
         /* There are certain constraints on rx and ry. */
         rx = MIN(rx, width/2.0);
         ry = MIN(ry, height/2.0);
-        
+
         atomPtr = NewMoveToAtom(x+rx, y);
         firstAtomPtr = atomPtr;
         atomPtr->nextPtr = NewLineToAtom(x+width-rx, y);
@@ -78,7 +77,7 @@ TkPathMakePrectAtoms(double *pointsPtr, double rx, double ry, PathAtom **atomPtr
         *atomPtrPtr = firstAtomPtr;
     } else {
         atomPtr = NewRectAtom(pointsPtr);
-        *atomPtrPtr = atomPtr;        
+        *atomPtrPtr = atomPtr;
     }
 }
 
@@ -109,17 +108,17 @@ TkPathDrawPath(
                              * of PathAtoms. */
     Tk_PathStyle *stylePtr, /* The paths style. */
     TMatrix *mPtr,          /* Typically used for canvas offsets. */
-    PathRect *bboxPtr)      /* The bare (untransformed) bounding box 
+    PathRect *bboxPtr)      /* The bare (untransformed) bounding box
                              * (assuming zero stroke width) */
 {
     TkPathContext context;
-    
+
     /*
      * Define the path in the drawable using the path drawing functions.
      * Any transform matrix need to be considered and canvas drawable
      * offset must always be taken into account. Note the order!
      */
-     
+
     context = TkPathInit(tkwin, drawable);
     if (mPtr != NULL) {
         TkPathPushTMatrix(context, mPtr);
@@ -152,26 +151,26 @@ TkPathDrawPath(
 
 void
 TkPathPaintPath(
-    TkPathContext context, 
+    TkPathContext context,
     PathAtom *atomPtr,      /* The actual path as a linked list
                              * of PathAtoms. */
     Tk_PathStyle *stylePtr, /* The paths style. */
     PathRect *bboxPtr)
 {
     TkPathGradientMaster *gradientPtr = GetGradientMasterFromPathColor(stylePtr->fill);
-    
+
     if (gradientPtr != NULL) {
         TkPathClipToPath(context, stylePtr->fillRule);
         PathGradientPaint(context, bboxPtr, gradientPtr, stylePtr->fillRule, stylePtr->fillOpacity);
-        
-        /* NB: Both CoreGraphics on MacOSX and Win32 GDI (and cairo from 1.0) 
+
+        /* NB: Both CoreGraphics on MacOSX and Win32 GDI (and cairo from 1.0)
          *     clear the current path when setting clipping. Need therefore
-         *     to redo the path. 
+         *     to redo the path.
          */
         if (TkPathDrawingDestroysPath()) {
             TkPathMakePath(context, atomPtr, stylePtr);
         }
-        
+
         /* We shall remove the path clipping here! */
         TkPathReleaseClipToPath(context);
     }
@@ -189,7 +188,7 @@ PathRect
 TkPathGetTotalBbox(PathAtom *atomPtr, Tk_PathStyle *stylePtr)
 {
     PathRect bare, total;
-    
+
     bare = GetGenericBarePathBbox(atomPtr);
     total = GetGenericPathTotalBboxFromBare(atomPtr, stylePtr, &bare);
     return total;
@@ -197,8 +196,10 @@ TkPathGetTotalBbox(PathAtom *atomPtr, Tk_PathStyle *stylePtr)
 
 /* Return NULL on error and leave error message */
 
-// @@@ OBSOLETE SOON!!!
-// As a temporary mean before trashing it we ignore gradients.
+/*
+ * @@@ OBSOLETE SOON!!!
+ * As a temporary mean before trashing it we ignore gradients.
+ */
 
 TkPathColor *
 TkPathNewPathColor(Tcl_Interp *interp, Tk_Window tkwin, Tcl_Obj *nameObj)
@@ -206,7 +207,7 @@ TkPathNewPathColor(Tcl_Interp *interp, Tk_Window tkwin, Tcl_Obj *nameObj)
     char *name;
     TkPathColor *colorPtr;
     XColor *color = NULL;
-    
+
     name = Tcl_GetStringFromObj(nameObj, NULL);
     colorPtr = (TkPathColor *) ckalloc(sizeof(TkPathColor));
     colorPtr->color = NULL;
@@ -220,7 +221,7 @@ TkPathNewPathColor(Tcl_Interp *interp, Tk_Window tkwin, Tcl_Obj *nameObj)
         Tcl_SetObjResult(interp, Tcl_NewStringObj(tmp, -1));
         return NULL;
     }
-    colorPtr->color = color;     
+    colorPtr->color = color;
     return colorPtr;
 }
 
@@ -235,7 +236,7 @@ TkPathNewPathColor(Tcl_Interp *interp, Tk_Window tkwin, Tcl_Obj *nameObj)
  *      Like Tk_GetImage() but for TkPathColor instead of Tk_Image.
  *
  * Results:
- *	Pointer to a TkPathColor struct or returns NULL on error 
+ *	Pointer to a TkPathColor struct or returns NULL on error
  *      and leaves an error message.
  *
  * Side effects:
@@ -245,7 +246,7 @@ TkPathNewPathColor(Tcl_Interp *interp, Tk_Window tkwin, Tcl_Obj *nameObj)
  */
 
 TkPathColor *
-TkPathGetPathColor(Tcl_Interp *interp, Tk_Window tkwin, 
+TkPathGetPathColor(Tcl_Interp *interp, Tk_Window tkwin,
     Tcl_Obj *nameObj, Tcl_HashTable *tablePtr,
     TkPathGradientChangedProc *changeProc, ClientData clientData)
 {
@@ -253,16 +254,16 @@ TkPathGetPathColor(Tcl_Interp *interp, Tk_Window tkwin,
     TkPathColor *colorPtr;
     XColor *color = NULL;
     TkPathGradientInst *gradientInstPtr;
-    
+
     name = Tcl_GetString(nameObj);
     colorPtr = (TkPathColor *) ckalloc(sizeof(TkPathColor));
-    
+
     /*
      * Only one of them can be non NULL.
      */
     colorPtr->color = NULL;
     colorPtr->gradientInstPtr = NULL;
-    
+
     gradientInstPtr = TkPathGetGradient(interp, name, tablePtr, changeProc, clientData);
     if (gradientInstPtr != NULL) {
         colorPtr->gradientInstPtr = gradientInstPtr;
@@ -277,7 +278,7 @@ TkPathGetPathColor(Tcl_Interp *interp, Tk_Window tkwin,
             Tcl_SetObjResult(interp, resultObj);
             return NULL;
         }
-        colorPtr->color = color;     
+        colorPtr->color = color;
     }
     return colorPtr;
 }
@@ -312,7 +313,7 @@ TkPathFreePathColor(TkPathColor *colorPtr)
  */
 
 void
-PathCopyBitsARGB(unsigned char *from, unsigned char *to, 
+PathCopyBitsARGB(unsigned char *from, unsigned char *to,
         int width, int height, int bytesPerRow)
 {
     unsigned char *src, *dst;
@@ -320,7 +321,7 @@ PathCopyBitsARGB(unsigned char *from, unsigned char *to,
 
     /* Copy XRGB to RGBX in one shot, alphas in a loop. */
     memcpy(to, from+1, height*bytesPerRow-1);
-    
+
     for (i = 0; i < height; i++) {
         src = from + i*bytesPerRow;
         dst = to + i*bytesPerRow;
@@ -332,12 +333,12 @@ PathCopyBitsARGB(unsigned char *from, unsigned char *to,
 }
 
 void
-PathCopyBitsBGRA(unsigned char *from, unsigned char *to, 
+PathCopyBitsBGRA(unsigned char *from, unsigned char *to,
         int width, int height, int bytesPerRow)
 {
     unsigned char *src, *dst;
     int i, j;
-    
+
     /* Copy BGRA -> RGBA */
     for (i = 0; i < height; i++) {
         src = from + i*bytesPerRow;
@@ -374,7 +375,7 @@ PathCopyBitsBGRA(unsigned char *from, unsigned char *to,
  */
 
 void
-PathCopyBitsPremultipliedAlphaRGBA(unsigned char *from, unsigned char *to, 
+PathCopyBitsPremultipliedAlphaRGBA(unsigned char *from, unsigned char *to,
         int width, int height, int bytesPerRow)
 {
     unsigned char *src, *dst, alpha;
@@ -402,9 +403,9 @@ PathCopyBitsPremultipliedAlphaRGBA(unsigned char *from, unsigned char *to,
     }
 }
 
-// UNTESTED!
+/* UNTESTED! */
 void
-PathCopyBitsPremultipliedAlphaARGB(unsigned char *from, unsigned char *to, 
+PathCopyBitsPremultipliedAlphaARGB(unsigned char *from, unsigned char *to,
         int width, int height, int bytesPerRow)
 {
     unsigned char *src, *dst, alpha;
@@ -437,7 +438,7 @@ PathCopyBitsPremultipliedAlphaARGB(unsigned char *from, unsigned char *to,
 }
 
 void
-PathCopyBitsPremultipliedAlphaBGRA(unsigned char *from, unsigned char *to, 
+PathCopyBitsPremultipliedAlphaBGRA(unsigned char *from, unsigned char *to,
         int width, int height, int bytesPerRow)
 {
     unsigned char *src, *dst, alpha;
@@ -474,7 +475,7 @@ PathCopyBitsPremultipliedAlphaBGRA(unsigned char *from, unsigned char *to,
 }
 
 /* from mozilla */
-static double 
+static double
 CalcVectorAngle(double ux, double uy, double vx, double vy)
 {
     double ta = atan2(uy, ux);
@@ -486,6 +487,7 @@ CalcVectorAngle(double ux, double uy, double vx, double vy)
     }
 }
 
+#ifdef NOWHERE_USED
 /*
  *--------------------------------------------------------------
  *
@@ -509,8 +511,8 @@ CentralToEndpointArcParameters(
         double cx, double cy, double rx, double ry,	/* In pars. */
         double theta1, double dtheta, double phi,
         double *x1Ptr, double *y1Ptr, 			/* Out. */
-        double *x2Ptr, double *y2Ptr, 
-        char *largeArcFlagPtr, char *sweepFlagPtr)	
+        double *x2Ptr, double *y2Ptr,
+        char *largeArcFlagPtr, char *sweepFlagPtr)
 {
     double theta2;
     double sinPhi, cosPhi;
@@ -524,7 +526,7 @@ CentralToEndpointArcParameters(
     cosTheta1 = cos(theta1);
     sinTheta2 = sin(theta2);
     cosTheta2 = cos(theta2);
-    
+
     /* F.6.4 Conversion from center to endpoint parameterization. */
     *x1Ptr = cx + rx * cosTheta1 * cosPhi - ry * sinTheta1 * sinPhi;
     *y1Ptr = cy + rx * cosTheta1 * sinPhi + ry * sinTheta1 * cosPhi;
@@ -536,6 +538,7 @@ CentralToEndpointArcParameters(
 
     return TCL_OK;
 }
+#endif
 
 /*
  *--------------------------------------------------------------
@@ -581,7 +584,7 @@ EndpointToCentralArcParameters(
     if (DOUBLE_EQUALS(x1, x2) && DOUBLE_EQUALS(y1, y2)) {
         return kPathArcSkip;
     }
-    
+
     /* If rx = 0 or ry = 0 then this arc is treated as a straight line
      * segment (a "lineto") joining the endpoints.
      */
@@ -597,7 +600,7 @@ EndpointToCentralArcParameters(
 
     if (largeArcFlag != 0) largeArcFlag = 1;
     if (sweepFlag != 0) sweepFlag = 1;
-  
+
     /* 2. convert to center parameterization as shown in
      * http://www.w3.org/TR/SVG/implnote.html
      */
@@ -610,8 +613,8 @@ EndpointToCentralArcParameters(
 
     /* Compute cx' and cy'. */
     numerator = rx*rx*ry*ry - rx*rx*y1dash*y1dash - ry*ry*x1dash*x1dash;
-    if (numerator < 0.0) { 
-    
+    if (numerator < 0.0) {
+
         /* If rx , ry and are such that there is no solution (basically,
          * the ellipse is not big enough to reach from (x1, y1) to (x2,
          * y2)) then the ellipse is scaled up uniformly until there is
@@ -620,7 +623,7 @@ EndpointToCentralArcParameters(
          *    ry'=s*ry becomes 0 :
          */
         float s = (float) sqrt(1.0 - numerator/(rx*rx*ry*ry));
-    
+
         rx *= s;
         ry *= s;
         root = 0.0;
@@ -628,7 +631,7 @@ EndpointToCentralArcParameters(
         root = (largeArcFlag == sweepFlag ? -1.0 : 1.0) *
                 sqrt( numerator/(rx*rx*y1dash*y1dash + ry*ry*x1dash*x1dash) );
     }
-    
+
     cxdash =  root*rx*y1dash/ry;
     cydash = -root*ry*x1dash/rx;
 
@@ -648,11 +651,11 @@ EndpointToCentralArcParameters(
     }
     *cxPtr = cx;
     *cyPtr = cy;
-    *rxPtr = rx; 
+    *rxPtr = rx;
     *ryPtr = ry;
     *theta1Ptr = theta1;
-    *dthetaPtr = dtheta; 
-    
+    *dthetaPtr = dtheta;
+
     return kPathArcOK;
 }
 
@@ -672,11 +675,11 @@ EndpointToCentralArcParameters(
  *--------------------------------------------------------------
  */
 
-int 
+int
 TableLookup(LookupTable *map, int n, int from)
 {
     int i = 0;
-    
+
     while ((i < n) && (from != map[i].from))
         i++;
     if (i == n) {
@@ -689,8 +692,8 @@ TableLookup(LookupTable *map, int n, int from)
 /*
  * Miscellaneous matrix utilities.
  */
- 
-void 
+
+void
 PathApplyTMatrix(TMatrix *m, double *x, double *y)
 {
     if (m != NULL) {
@@ -701,7 +704,7 @@ PathApplyTMatrix(TMatrix *m, double *x, double *y)
     }
 }
 
-void 
+void
 PathApplyTMatrixToPoint(TMatrix *m, double in[2], double out[2])
 {
     if (m == NULL) {
@@ -717,7 +720,7 @@ void
 PathInverseTMatrix(TMatrix *m, TMatrix *mi)
 {
     double det;
-    
+
     /* @@@ We need error checking for det = 0 */
     det = m->a * m->d - m->b * m->c;
     mi->a  =  m->d/det;
@@ -756,7 +759,7 @@ MMulTMatrix(TMatrix *m1, TMatrix *m2)
     } else {
         TMatrix tmp = *m2;
         TMatrix *p = m2;
-        
+
         p->a  = m1->a*tmp.a  + m1->b*tmp.c;
         p->b  = m1->a*tmp.b  + m1->b*tmp.d;
         p->c  = m1->c*tmp.a  + m1->d*tmp.c;
@@ -771,7 +774,7 @@ MMulTMatrix(TMatrix *m1, TMatrix *m2)
  *
  * PathGetTMatrix --
  *
- *	Parses a Tcl list (in string) into a TMatrix record.  
+ *	Parses a Tcl list (in string) into a TMatrix record.
  *
  * Results:
  *	Standard Tcl result
@@ -784,14 +787,15 @@ MMulTMatrix(TMatrix *m1, TMatrix *m2)
 
 int
 PathGetTMatrix(
-        Tcl_Interp* interp, 
-        CONST char *list, 	/* Object containg the lists for the matrix. */
+        Tcl_Interp* interp,
+        const char *list, 	/* Object containg the lists for the matrix. */
         TMatrix *matrixPtr)	/* Where to store TMatrix corresponding
                                  * to list. Must be allocated! */
 {
-    CONST char **argv = NULL;
-    CONST char **rowArgv = NULL;
-    int i, j, argc, rowArgc;
+    const char **argv = NULL;
+    const char **rowArgv = NULL;
+    Tcl_Size argc, rowArgc;
+    int i, j;
     int result = TCL_OK;
     double tmp[3][2];
 
@@ -806,7 +810,7 @@ PathGetTMatrix(
         result = TCL_ERROR;
         goto bail;
     }
-    
+
     /* Take each row in turn. */
     for (i = 0; i < 3; i++) {
         if (Tcl_SplitList(interp, argv[i], &rowArgc, &rowArgv) != TCL_OK) {
@@ -832,8 +836,7 @@ PathGetTMatrix(
             rowArgv = NULL;
         }
     }
-        
-#if 0
+
     /* Check that the matrix is not close to being singular. */
     if (fabs(tmp[0][0]*tmp[1][1] - tmp[0][1]*tmp[1][0]) < 1e-6) {
         Tcl_AppendResult(interp, "matrix \"", list, "\" is close to singular",
@@ -841,8 +844,7 @@ PathGetTMatrix(
             result = TCL_ERROR;
             goto bail;
     }
-#endif
-        
+
     /* Matrix. */
     matrixPtr->a  = tmp[0][0];
     matrixPtr->b  = tmp[0][1];
@@ -850,7 +852,7 @@ PathGetTMatrix(
     matrixPtr->d  = tmp[1][1];
     matrixPtr->tx = tmp[2][0];
     matrixPtr->ty = tmp[2][1];
-    
+
 bail:
     if (argv != NULL) {
         Tcl_Free((char *) argv);
@@ -879,12 +881,12 @@ bail:
 
 int
 PathGetTclObjFromTMatrix(
-        Tcl_Interp* interp, 
+        Tcl_Interp* interp,
         TMatrix *matrixPtr,
         Tcl_Obj **listObjPtrPtr)
 {
 	Tcl_Obj		*listObj, *subListObj;
-    
+
     /* @@@ Error handling remains. */
 
     listObj = Tcl_NewListObj( 0, (Tcl_Obj **) NULL );
@@ -893,12 +895,12 @@ PathGetTclObjFromTMatrix(
         Tcl_ListObjAppendElement(interp, subListObj, Tcl_NewDoubleObj(matrixPtr->a));
         Tcl_ListObjAppendElement(interp, subListObj, Tcl_NewDoubleObj(matrixPtr->b));
         Tcl_ListObjAppendElement(interp, listObj, subListObj);
-        
+
         subListObj = Tcl_NewListObj( 0, (Tcl_Obj **) NULL );
         Tcl_ListObjAppendElement(interp, subListObj, Tcl_NewDoubleObj(matrixPtr->c));
         Tcl_ListObjAppendElement(interp, subListObj, Tcl_NewDoubleObj(matrixPtr->d));
         Tcl_ListObjAppendElement(interp, listObj, subListObj);
-        
+
         subListObj = Tcl_NewListObj( 0, (Tcl_Obj **) NULL );
         Tcl_ListObjAppendElement(interp, subListObj, Tcl_NewDoubleObj(matrixPtr->tx));
         Tcl_ListObjAppendElement(interp, subListObj, Tcl_NewDoubleObj(matrixPtr->ty));
@@ -913,7 +915,7 @@ PathGetTclObjFromTMatrix(
  *
  * TkPathGenericCmdDispatcher --
  *
- *	Supposed to be a generic command dispatcher.  
+ *	Supposed to be a generic command dispatcher.
  *
  * Results:
  *	Standard Tcl result
@@ -924,7 +926,7 @@ PathGetTclObjFromTMatrix(
  *----------------------------------------------------------------------
  */
 
-static CONST char *genericCmds[] = {
+static const char *genericCmds[] = {
     "cget", "configure", "create", "delete", "names",
     (char *) NULL
 };
@@ -937,18 +939,18 @@ enum {
     kPathGenericCmdNames
 };
 
-int 
-TkPathGenericCmdDispatcher( 
+int
+TkPathGenericCmdDispatcher(
         Tcl_Interp* interp,
         Tk_Window tkwin,
         int objc,
-      	Tcl_Obj* CONST objv[],
+      	Tcl_Obj* const objv[],
         char *baseName,
         int *baseNameUIDPtr,
         Tcl_HashTable *hashTablePtr,
         Tk_OptionTable optionTable,
-        char *(*createAndConfigProc)(Tcl_Interp *interp, char *name, int objc, Tcl_Obj *CONST objv[]),
-        void (*configNotifyProc)(char *recordPtr, int mask, int objc, Tcl_Obj *CONST objv[]),
+        char *(*createAndConfigProc)(Tcl_Interp *interp, char *name, int objc, Tcl_Obj *const objv[]),
+        void (*configNotifyProc)(char *recordPtr, int mask, int objc, Tcl_Obj *const objv[]),
         void (*freeProc)(Tcl_Interp *interp, char *recordPtr))
 {
     char   		*name;
@@ -969,10 +971,10 @@ TkPathGenericCmdDispatcher(
     }
 
     switch (index) {
-    
+
         case kPathGenericCmdCget: {
             Tcl_Obj *resultObjPtr = NULL;
-            
+
     		if (objc != 4) {
 				Tcl_WrongNumArgs( interp, 3, objv, "option" );
     			return TCL_ERROR;
@@ -980,7 +982,7 @@ TkPathGenericCmdDispatcher(
             name = Tcl_GetString(objv[2]);
             hPtr = Tcl_FindHashEntry(hashTablePtr, name);
             if (hPtr == NULL) {
-                Tcl_AppendResult(interp, 
+                Tcl_AppendResult(interp,
                         "object \"", name, "\" doesn't exist", NULL);
                 return TCL_ERROR;
             }
@@ -993,7 +995,7 @@ TkPathGenericCmdDispatcher(
 			}
             break;
         }
-        
+
         case kPathGenericCmdConfigure: {
 			Tcl_Obj *resultObjPtr = NULL;
 
@@ -1004,7 +1006,7 @@ TkPathGenericCmdDispatcher(
             name = Tcl_GetString(objv[2]);
             hPtr = Tcl_FindHashEntry(hashTablePtr, name);
             if (hPtr == NULL) {
-                Tcl_AppendResult(interp, 
+                Tcl_AppendResult(interp,
                         "object \"", name, "\" doesn't exist", NULL);
                 return TCL_ERROR;
             }
@@ -1019,7 +1021,7 @@ TkPathGenericCmdDispatcher(
                 }
 				Tcl_SetObjResult(interp, resultObjPtr);
 			} else {
-				if (Tk_SetOptions(interp, recordPtr, optionTable, objc - 3, objv + 3, 
+				if (Tk_SetOptions(interp, recordPtr, optionTable, objc - 3, objv + 3,
                         tkwin, NULL, &mask) != TCL_OK) {
 					return TCL_ERROR;
                 }
@@ -1029,9 +1031,9 @@ TkPathGenericCmdDispatcher(
 			}
             break;
         }
-        
+
         case kPathGenericCmdCreate: {
-        
+
             /*
              * Create with auto generated unique name.
              */
@@ -1048,12 +1050,12 @@ TkPathGenericCmdDispatcher(
 			if (recordPtr == NULL) {
 				return TCL_ERROR;
             }
-            
+
             if (Tk_InitOptions(interp, recordPtr, optionTable, tkwin) != TCL_OK) {
                 ckfree(recordPtr);
                 return TCL_ERROR;
             }
-            if (Tk_SetOptions(interp, recordPtr, optionTable, 	
+            if (Tk_SetOptions(interp, recordPtr, optionTable,
                     objc - 2, objv + 2, tkwin, NULL, &mask) != TCL_OK) {
                 Tk_FreeConfigOptions(recordPtr, optionTable, tkwin);
                 ckfree(recordPtr);
@@ -1068,7 +1070,7 @@ TkPathGenericCmdDispatcher(
 			Tcl_SetObjResult(interp, Tcl_NewStringObj(str, -1));
             break;
         }
-                
+
         case kPathGenericCmdDelete: {
 			if (objc < 3) {
 				Tcl_WrongNumArgs(interp, 2, objv, "name");
@@ -1084,7 +1086,7 @@ TkPathGenericCmdDispatcher(
             (*freeProc)(interp, recordPtr);
 			break;
         }
-        
+
         case kPathGenericCmdNames: {
 			Tcl_Obj *listObj;
 			Tcl_HashSearch search;
@@ -1126,7 +1128,7 @@ int
 ObjectIsEmpty(
         Tcl_Obj *objPtr)	/* Object to test.  May be NULL. */
 {
-    int length;
+    Tcl_Size length;
 
     if (objPtr == NULL) {
         return 1;
@@ -1140,8 +1142,8 @@ ObjectIsEmpty(
 
 static int
 DashConvertToFloats (
-    float *d,		/* The resulting dashes. (Out) */	
-    CONST char *p,	/* A string of "_-,." */
+    float *d,		/* The resulting dashes. (Out) */
+    const char *p,	/* A string of "_-,." */
     size_t n,
     double width)
 {
@@ -1189,7 +1191,7 @@ DashConvertToFloats (
 
 void
 PathParseDashToArray(Tk_Dash *dash, double width, int *len, float **arrayPtrPtr)
-{    
+{
     char *pt;
     int	i;
     float *arrPtr = NULL;
@@ -1197,7 +1199,7 @@ PathParseDashToArray(Tk_Dash *dash, double width, int *len, float **arrayPtrPtr)
     if (dash->number == 0) {
         *len = 0;
     } else if (dash->number < 0) {
-        
+
         /* Any of . , - _ verbatim. */
         i = -1*dash->number;
         pt = (i > (int)sizeof(char *)) ? dash->pattern.pt : dash->pattern.array;
@@ -1214,13 +1216,18 @@ PathParseDashToArray(Tk_Dash *dash, double width, int *len, float **arrayPtrPtr)
         *len = dash->number;
         arrPtr = (float *) ckalloc(dash->number * sizeof(float));
         for (i = 0; i < dash->number; i++) {
-        
+
             /* We could optionally multiply with 'width' here. */
             arrPtr[i] = pt[i];
         }
     }
     *arrayPtrPtr = arrPtr;
 }
-
-/*-------------------------------------------------------------------------*/
-
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

@@ -5,7 +5,6 @@
  *
  * Copyright (c) 2005-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 /* This should go into configure.in but don't know how. */
@@ -25,34 +24,36 @@
 
 using namespace Gdiplus;
 
-extern Tcl_Interp *gInterp;
 extern "C" int gAntiAlias;
 extern "C" int gSurfaceCopyPremultiplyAlpha;
 
-#define MakeGDIPlusColor(xc, opacity)     Color(BYTE(opacity*255),              \
-                                            BYTE(((xc)->pixel & 0xFF)),         \
-                                            BYTE(((xc)->pixel >> 8) & 0xFF),    \
-                                            BYTE(((xc)->pixel >> 16) & 0xFF))
+#define MakeGDIPlusColor(xc, opacity) \
+    Color(BYTE(opacity*255),          \
+          BYTE((xc)->red >> 8),      \
+          BYTE((xc)->green >> 8),     \
+          BYTE((xc)->blue >> 8))
 
 static LookupTable LineCapStyleLookupTable[] = {
-    {CapNotLast,     LineCapFlat},
-    {CapButt,          LineCapFlat},
-    {CapRound,          LineCapRound},
+    {CapNotLast,    LineCapFlat},
+    {CapButt,       LineCapFlat},
+    {CapRound,      LineCapRound},
     {CapProjecting, LineCapSquare}
 };
 
 static LookupTable DashCapStyleLookupTable[] = {
-    {CapNotLast,     DashCapFlat},
-    {CapButt,          DashCapFlat},
-    {CapRound,          DashCapRound},
+    {CapNotLast,    DashCapFlat},
+    {CapButt,       DashCapFlat},
+    {CapRound,      DashCapRound},
     {CapProjecting, DashCapRound}
 };
 
 static LookupTable LineJoinStyleLookupTable[] = {
-    {JoinMiter, LineJoinMiter},
-    {JoinRound,    LineJoinRound},
-    {JoinBevel, LineJoinBevel}
+    {JoinMiter,     LineJoinMiter},
+    {JoinRound,     LineJoinRound},
+    {JoinBevel,     LineJoinBevel}
 };
+
+TCL_DECLARE_MUTEX(sGdiplusMutex)
 
 static int sGdiplusStarted;
 static ULONG_PTR sGdiplusToken;
@@ -81,17 +82,22 @@ class PathC {
     void CurveTo(float x1, float y1, float x2, float y2, float x, float y);
     void AddRectangle(float x, float y, float width, float height);
     void AddEllipse(float cx, float cy, float rx, float ry);
-    void DrawImage(Tk_PhotoHandle photo, float x, float y, float width, float height, double fillOpacity,
-            XColor *tintColor, double tintAmount, int interpolation, PathRect *srcRegion);
+    void DrawImage(Tk_PhotoHandle photo, float x, float y, float width,
+                   float height, double fillOpacity,
+                   XColor *tintColor, double tintAmount, int interpolation,
+                   PathRect *srcRegion);
     void DrawString(Tk_PathStyle *style, Tk_PathTextStyle *textStylePtr,
-        float x, float y, int fillOverStroke, char *utf8);
+                    float x, float y, int fillOverStroke, char *utf8);
     void CloseFigure(void);
     void Stroke(Tk_PathStyle *style);
     void Fill(Tk_PathStyle *style);
     void FillAndStroke(Tk_PathStyle *style);
     void GetCurrentPoint(PointF *pt);
-    void FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr);
-    void FillRadialGradient(PathRect *bbox, RadialGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr);
+    void FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr,
+                            int fillRule, double fillOpacity, TMatrix *mPtr);
+    void FillRadialGradient(PathRect *bbox, RadialGradientFill *fillPtr,
+                            int fillRule, double fillOpacity, TMatrix *mPtr);
+    void Flush();
 
   private:
     HDC                 mMemHdc;
@@ -111,11 +117,13 @@ typedef struct PathSurfaceGDIpRecord {
     void *  data;
     int     width;
     int     height;
-    int     bytesPerRow;        /* the number of bytes between the start of rows in the buffer */
+    int     bytesPerRow; /* the number of bytes between the start of
+                          * rows in the buffer */
 } PathSurfaceGDIpRecord;
 
 /*
- * This is used as a place holder for platform dependent stuff between each call.
+ * This is used as a place holder for platform dependent stuff
+ * between each call.
  */
 typedef struct TkPathContext_ {
     PathC *        c;
@@ -123,18 +131,19 @@ typedef struct TkPathContext_ {
     PathSurfaceGDIpRecord *    surface;    /* NULL unless surface. */
 } TkPathContext_;
 
-void InitGDIplus(void)
+void
+InitGDIplus(void)
 {
-    //Status status;
-    GdiplusStartupInput gdiplusStartupInput;
+    Tcl_MutexLock(&sGdiplusMutex);
+    if (!sGdiplusStarted) {
+        GdiplusStartupInput gdiplusStartupInput;
 
-    GdiplusStartup(&sGdiplusToken, &gdiplusStartupInput, &sGdiplusStartupOutput);
-    /*status = GdiplusStartup(&sGdiplusToken, &gdiplusStartupInput, &sGdiplusStartupOutput);
-    if (status != Ok) {
-        return;
-    }*/
-    Tcl_CreateExitHandler(PathExit, NULL);
-    sGdiplusStarted = 1;
+        GdiplusStartup(&sGdiplusToken, &gdiplusStartupInput,
+                       &sGdiplusStartupOutput);
+        Tcl_CreateExitHandler(PathExit, NULL);
+        sGdiplusStarted = 1;
+    }
+    Tcl_MutexUnlock(&sGdiplusMutex);
 }
 
 PathC::PathC(HDC hdc)
@@ -152,7 +161,8 @@ PathC::PathC(HDC hdc)
     return;
 }
 
-inline PathC::~PathC(void)
+inline
+PathC::~PathC(void)
 {
     if (mPath) {
         delete mPath;
@@ -162,7 +172,8 @@ inline PathC::~PathC(void)
     }
 }
 
-Pen* PathC::PathCreatePen(Tk_PathStyle *style)
+Pen *
+PathC::PathCreatePen(Tk_PathStyle *style)
 {
     LineCap     cap;
     DashCap     dashCap;
@@ -170,59 +181,83 @@ Pen* PathC::PathCreatePen(Tk_PathStyle *style)
     Pen        *penPtr;
     Tk_PathDash *dashPtr;
 
-    penPtr = new Pen(MakeGDIPlusColor(style->strokeColor, style->strokeOpacity), (float) style->strokeWidth);
+    penPtr = new Pen(MakeGDIPlusColor(style->strokeColor,
+                                      style->strokeOpacity),
+                     (float) style->strokeWidth);
 
-    cap     = static_cast<LineCap>(TableLookup(LineCapStyleLookupTable, 4, style->capStyle));
-    dashCap = static_cast<DashCap>(TableLookup(DashCapStyleLookupTable, 4, style->capStyle));
+    cap     = static_cast<LineCap>(TableLookup(LineCapStyleLookupTable,
+                                               4, style->capStyle));
+    dashCap = static_cast<DashCap>(TableLookup(DashCapStyleLookupTable,
+                                               4, style->capStyle));
     penPtr->SetLineCap(cap, cap, dashCap);
 
-    lineJoin = static_cast<LineJoin>(TableLookup(LineJoinStyleLookupTable, 3, style->joinStyle));
+    lineJoin = static_cast<LineJoin>(TableLookup(LineJoinStyleLookupTable, 3,
+                                                 style->joinStyle));
     penPtr->SetLineJoin(lineJoin);
 
     penPtr->SetMiterLimit((float) style->miterLimit);
 
     dashPtr = style->dashPtr;
     if ((dashPtr != NULL) && (dashPtr->number != 0)) {
-    penPtr->SetDashPattern(dashPtr->array, dashPtr->number);
+        penPtr->SetDashPattern(dashPtr->array, dashPtr->number);
         penPtr->SetDashOffset((float) style->offset);
     }
     return penPtr;
 }
 
-inline SolidBrush* PathC::PathCreateBrush(Tk_PathStyle *style)
+inline SolidBrush *
+PathC::PathCreateBrush(Tk_PathStyle *style)
 {
     SolidBrush     *brushPtr;
-    brushPtr = new SolidBrush(MakeGDIPlusColor(GetColorFromPathColor(style->fill), style->fillOpacity));
+    brushPtr =
+       new SolidBrush(MakeGDIPlusColor(GetColorFromPathColor(style->fill),
+                                       style->fillOpacity));
     return brushPtr;
 }
 
-inline void PathC::PushTMatrix(TMatrix *tm)
+inline void
+PathC::PushTMatrix(TMatrix *tm)
 {
-    Matrix m(float(tm->a), float(tm->b), float(tm->c), float(tm->d), float(tm->tx), float(tm->ty));
+    Matrix m(float(tm->a), float(tm->b), float(tm->c), float(tm->d),
+             float(tm->tx), float(tm->ty));
     mGraphics->MultiplyTransform(&m);
 }
 
-inline void PathC::SaveState()
+inline void
+PathC::Flush()
+{
+    mGraphics->Flush(FlushIntentionSync);
+}
+
+inline void
+PathC::SaveState()
 {
     if (mCointainerTop >= 9) {
         Tcl_Panic("reached top of cointainer stack of GDI+");
     }
     mContainerStack[mCointainerTop] = mGraphics->BeginContainer();
     mCointainerTop++;
+    if (gAntiAlias) {
+        mGraphics->SetSmoothingMode(SmoothingModeAntiAlias);
+    }
 }
 
-inline void PathC::RestoreState()
+inline void
+PathC::RestoreState()
 {
     mCointainerTop--;
     mGraphics->EndContainer(mContainerStack[mCointainerTop]);
 }
 
-inline void PathC::BeginPath(Tk_PathStyle *style)
+inline void
+PathC::BeginPath(Tk_PathStyle *style)
 {
-    mPath = new GraphicsPath((style->fillRule == WindingRule) ? FillModeWinding : FillModeAlternate);
+    mPath = new GraphicsPath((style->fillRule == WindingRule) ?
+                             FillModeWinding : FillModeAlternate);
 }
 
-inline void PathC::MoveTo(float x, float y)
+inline void
+PathC::MoveTo(float x, float y)
 {
     mPath->StartFigure();
     mOrigin.X = (float) x;
@@ -231,23 +266,26 @@ inline void PathC::MoveTo(float x, float y)
     mCurrentPoint.Y = (float) y;
 }
 
-inline void PathC::LineTo(float x, float y)
+inline void
+PathC::LineTo(float x, float y)
 {
     mPath->AddLine(mCurrentPoint.X, mCurrentPoint.Y, x, y);
     mCurrentPoint.X = x;
     mCurrentPoint.Y = y;
 }
 
-inline void PathC::CurveTo(float x1, float y1, float x2, float y2, float x, float y)
+inline void
+PathC::CurveTo(float x1, float y1, float x2, float y2, float x, float y)
 {
     mPath->AddBezier(mCurrentPoint.X, mCurrentPoint.Y, // startpoint
-            x1, y1, x2, y2, // controlpoints
-            x, y);             // endpoint
+                     x1, y1, x2, y2,    // controlpoints
+                     x, y);             // endpoint
     mCurrentPoint.X = x;
     mCurrentPoint.Y = y;
 }
 
-inline void PathC::AddRectangle(float x, float y, float width, float height)
+inline void
+PathC::AddRectangle(float x, float y, float width, float height)
 {
     RectF rect(x, y, width, height);
     mPath->AddRectangle(rect);
@@ -256,7 +294,8 @@ inline void PathC::AddRectangle(float x, float y, float width, float height)
     mCurrentPoint.Y = y;
 }
 
-inline void PathC::AddEllipse(float cx, float cy, float rx, float ry)
+inline void
+PathC::AddEllipse(float cx, float cy, float rx, float ry)
 {
     mPath->AddEllipse(cx-rx, cy-ry, 2*rx, 2*ry);
     // @@@ TODO: this depends
@@ -264,7 +303,8 @@ inline void PathC::AddEllipse(float cx, float cy, float rx, float ry)
     mCurrentPoint.Y = cy;
 }
 
-inline InterpolationMode canvasInterpolationToGdiPlusInterpolation(int interpolation)
+inline InterpolationMode
+canvasInterpolationToGdiPlusInterpolation(int interpolation)
 {
     switch (interpolation) {
         case kPathImageInterpolationNone:
@@ -278,12 +318,18 @@ inline InterpolationMode canvasInterpolationToGdiPlusInterpolation(int interpola
     }
 }
 
-#define RedDoubleFromXColorPtr(xc)   (double) (((xc)->pixel & 0xFF)) / 255.0
-#define GreenDoubleFromXColorPtr(xc)  (double) ((((xc)->pixel >> 8) & 0xFF)) / 255.0
-#define BlueDoubleFromXColorPtr(xc)    (double) ((((xc)->pixel >> 16) & 0xFF)) / 255.0
+#define RedDoubleFromXColorPtr(xc) \
+    (double) (((xc)->red >> 8) / 255.0)
+#define GreenDoubleFromXColorPtr(xc) \
+    (double) (((xc)->green >> 8) / 255.0)
+#define BlueDoubleFromXColorPtr(xc) \
+    (double) (((xc)->blue >> 8) / 255.0)
 
-inline void PathC::DrawImage(Tk_PhotoHandle photo, float x, float y, float width, float height, double fillOpacity,
-        XColor *tintColor, double tintAmount, int interpolation, PathRect *srcRegion)
+inline void
+PathC::DrawImage(Tk_PhotoHandle photo, float x, float y,
+                 float width, float height, double fillOpacity,
+                 XColor *tintColor, double tintAmount,
+                 int interpolation, PathRect *srcRegion)
 {
     Tk_PhotoImageBlock block;
     PixelFormat format;
@@ -307,8 +353,10 @@ inline void PathC::DrawImage(Tk_PhotoHandle photo, float x, float y, float width
 
     int srcX = srcRegion ? (int)srcRegion->x1 : 0;
     int srcY = srcRegion ? (int)srcRegion->y1 : 0;
-    int srcWidth = srcRegion ? ((int)srcRegion->x2 - (int)srcRegion->x1) : iwidth;
-    int srcHeight = srcRegion ? ((int)srcRegion->y2 - (int)srcRegion->y1) : iheight;
+    int srcWidth = srcRegion ?
+        ((int)srcRegion->x2 - (int)srcRegion->x1) : iwidth;
+    int srcHeight = srcRegion ?
+        ((int)srcRegion->y2 - (int)srcRegion->y1) : iheight;
 
     if (width == 0.0) {
         width = (float)srcWidth;
@@ -318,8 +366,9 @@ inline void PathC::DrawImage(Tk_PhotoHandle photo, float x, float y, float width
     }
 
     if (tintColor && tintAmount > 0.0) {
-        if (tintAmount > 1.0)
+        if (tintAmount > 1.0) {
             tintAmount = 1.0;
+        }
         tintR = RedDoubleFromXColorPtr(tintColor);
         tintG = GreenDoubleFromXColorPtr(tintColor);
         tintB = BlueDoubleFromXColorPtr(tintColor);
@@ -342,7 +391,8 @@ inline void PathC::DrawImage(Tk_PhotoHandle photo, float x, float y, float width
         if (smallEndian) {
             dstR = 3-dstR, dstG = 3-dstG, dstB = 3-dstB, dstA = 3-dstA;
         }
-        if ((srcR == dstR) && (srcG == dstG) && (srcB == dstB) && (srcA == dstA)) {
+        if ((srcR == dstR) && (srcG == dstG) &&
+            (srcB == dstB) && (srcA == dstA)) {
             ptr = (unsigned char *) block.pixelPtr;
         } else {
             data = (unsigned char *) ckalloc(pitch*iheight);
@@ -369,26 +419,45 @@ inline void PathC::DrawImage(Tk_PhotoHandle photo, float x, float y, float width
     }
 
     ImageAttributes imageAttrs;
-    if (srcRegion && (srcRegion->x1 < 0 || srcRegion->x2 > iwidth || srcRegion->y1 < 0 || srcRegion->y2 > iheight)) {
-        imageAttrs.SetWrapMode(WrapModeTile);
-    }
-    ColorMatrix colorMatrix;
+    imageAttrs.SetWrapMode(WrapModeTile);
     if (fillOpacity < 1.0 || tintAmount > 0.0) {
+        ColorMatrix colorMatrix;
         /*
          * int lum = (int)(0.2126*r + 0.7152*g + 0.0722*b);
-         * r = (int)((1.0-tintAmount + tintAmount*tintR*0.2126) * r + tintAmount*tintR*0.7152*g + tintAmount*tintR*0.0722*b));
-         * g = (int)((1.0-tintAmount)*g + (tintAmount*tintG*0.2126*r + tintAmount*tintG*0.7152*g + tintAmount*tintG*0.0722*b));
-         * b = (int)((1.0-tintAmount)*b + (tintAmount*tintB*0.2126*r + tintAmount*tintB*0.7152*g + tintAmount*tintB*0.0722*b));
+         * r = (int)((1.0-tintAmount + tintAmount*tintR*0.2126) * r
+         *   + tintAmount*tintR*0.7152*g + tintAmount*tintR*0.0722*b));
+         * g = (int)((1.0-tintAmount)*g + (tintAmount*tintG*0.2126*r
+         *   + tintAmount*tintG*0.7152*g + tintAmount*tintG*0.0722*b));
+         * b = (int)((1.0-tintAmount)*b + (tintAmount*tintB*0.2126*r
+         *   + tintAmount*tintB*0.7152*g + tintAmount*tintB*0.0722*b));
          */
-        ColorMatrix tmp = {
-                1.0-tintAmount + tintAmount*tintR*0.2126, tintAmount*tintG*0.2126,                  tintAmount*tintB*0.2126,                  0.0f,               0.0f,
-                tintAmount*tintR*0.7152,                  1.0-tintAmount + tintAmount*tintG*0.7152, tintAmount*tintB*0.7152,                  0.0f,               0.0f,
-                tintAmount*tintR*0.0722,                  tintAmount*tintG*0.0722,                  1.0-tintAmount + tintAmount*tintB*0.0722, 0.0f,               0.0f,
-                0.0f,                                     0.0f,                                     0.0f,                                     (float)fillOpacity, 0.0f,
-                0.0f,                                     0.0f,                                     0.0f,                                     0.0f,               1.0f
-        };
-        colorMatrix = tmp;
-        imageAttrs.SetColorMatrix(&colorMatrix, ColorMatrixFlagsDefault, ColorAdjustTypeBitmap);
+        colorMatrix.m[0][0] = (float)(1.0-tintAmount + tintAmount*tintR*0.2126);
+        colorMatrix.m[0][1] = (float)(tintAmount*tintG*0.2126);
+        colorMatrix.m[0][2] = (float)(tintAmount*tintB*0.2126);
+        colorMatrix.m[0][3] = 0.0f;
+        colorMatrix.m[0][4] = 0.0f;
+        colorMatrix.m[1][0] = (float)(tintAmount*tintR*0.7152);
+        colorMatrix.m[1][1] = (float)(1.0-tintAmount + tintAmount*tintG*0.7152);
+        colorMatrix.m[1][2] = (float)(tintAmount*tintB*0.7152);
+        colorMatrix.m[1][3] = 0.0f;
+        colorMatrix.m[1][4] = 0.0f;
+        colorMatrix.m[2][0] = (float)(tintAmount*tintR*0.0722);
+        colorMatrix.m[2][1] = (float)(tintAmount*tintG*0.0722);
+        colorMatrix.m[2][2] = (float)(1.0-tintAmount + tintAmount*tintB*0.0722);
+        colorMatrix.m[2][3] = 0.0f;
+        colorMatrix.m[2][4] = 0.0f;
+        colorMatrix.m[3][0] = 0.0f;
+        colorMatrix.m[3][1] = 0.0f;
+        colorMatrix.m[3][2] = 0.0f;
+        colorMatrix.m[3][3] = (float)fillOpacity;
+        colorMatrix.m[3][4] = 0.0f;
+        colorMatrix.m[4][0] = 0.0f;
+        colorMatrix.m[4][1] = 0.0f;
+        colorMatrix.m[4][2] = 0.0f;
+        colorMatrix.m[4][3] = 0.0f;
+        colorMatrix.m[4][4] = 1.0f;
+        imageAttrs.SetColorMatrix(&colorMatrix, ColorMatrixFlagsDefault,
+                                  ColorAdjustTypeBitmap);
     }
     mGraphics->SetInterpolationMode(canvasInterpolationToGdiPlusInterpolation(interpolation));
     Bitmap bitmap(iwidth, iheight, stride, format, (BYTE *)ptr);
@@ -399,13 +468,15 @@ inline void PathC::DrawImage(Tk_PhotoHandle photo, float x, float y, float width
     }
 }
 
-inline int canvasTextStyle2GdiPlusTextStyle(Tk_PathTextStyle *textStylePtr)
+inline int
+canvasTextStyle2GdiPlusTextStyle(Tk_PathTextStyle *textStylePtr)
 {
     int fontStyle = 0;
     switch(textStylePtr->fontSlant) {
         case PATH_TEXT_SLANT_NORMAL: break;
         case PATH_TEXT_SLANT_ITALIC: fontStyle |= FontStyleItalic; break;
-        case PATH_TEXT_SLANT_OBLIQUE: fontStyle |= FontStyleItalic; break; /* no FontStyleOblique in GDI+ */
+        case PATH_TEXT_SLANT_OBLIQUE: fontStyle |= FontStyleItalic; break;
+             /* no FontStyleOblique in GDI+ */
         default: break;
     }
     switch (textStylePtr->fontWeight) {
@@ -416,79 +487,142 @@ inline int canvasTextStyle2GdiPlusTextStyle(Tk_PathTextStyle *textStylePtr)
     return fontStyle;
 }
 
-inline void PathC::DrawString(Tk_PathStyle *style, Tk_PathTextStyle *textStylePtr,
-        float x, float y, int fillOverStroke, char *utf8)
+static WCHAR *
+toWCharDS(const char *utf8, Tcl_DString *ds)
+{
+    int length = strlen(utf8);
+    const char *p = utf8;
+    while (p < utf8 + length) {
+        Tcl_UniChar ch;
+        WCHAR wch;
+        int next = Tcl_UtfToUniChar(p, &ch);
+#if TCL_UTF_MAX >= 4
+        if (ch > 0xffff) {
+            wch = (((ch - 0x10000) >> 10) & 0x3ff) | 0xd800;
+            ch = ((ch - 0x10000) & 0x3ff) | 0xdc00;
+            Tcl_DStringAppend(ds, (const char *) &wch, sizeof (WCHAR));
+        }
+#endif
+        if (ch == '\n') {
+            /* accept */
+        } else if (ch == '\r') {
+            ch = '\n';
+            if (p[next] == '\n') {
+                next++;
+            }
+        } else if (ch == '\t') {
+            /* two blanks */
+            ch = ' ';
+            wch = ch;
+            Tcl_DStringAppend(ds, (const char *) &wch, sizeof (WCHAR));
+        } else if ((ch >= '\0') && (ch < ' ')) {
+            goto skip;
+        }
+        wch = ch;
+        Tcl_DStringAppend(ds, (const char *) &wch, sizeof (WCHAR));
+skip:
+        p += next;
+    }
+    return (WCHAR *) Tcl_DStringValue(ds);
+}
+
+inline void
+PathC::DrawString(Tk_PathStyle *style, Tk_PathTextStyle *textStylePtr,
+                  float x, float y, int fillOverStroke, char *utf8)
 {
     Tcl_DString ds, dsFont;
-    Tcl_UniChar *uniPtr;
+    WCHAR *wcPtr, *endPtr;
 
     Tcl_DStringInit(&dsFont);
-    FontFamily fontFamily((const WCHAR *)Tcl_UtfToUniCharDString(textStylePtr->fontFamily, -1, &dsFont));
+    FontFamily fontFamily((const WCHAR *)
+                          Tcl_WinUtfToTChar(textStylePtr->fontFamily,
+                                            -1, &dsFont));
     if (fontFamily.GetLastStatus() != Ok) {
         fontFamily.GenericSansSerif();
     }
     int fontStyle = canvasTextStyle2GdiPlusTextStyle(textStylePtr);
-    Gdiplus::Font font(&fontFamily, (float) textStylePtr->fontSize, fontStyle, UnitPixel);
+    Gdiplus::Font font(&fontFamily, (float) textStylePtr->fontSize,
+                       fontStyle, UnitPixel);
     if (font.GetLastStatus() != Ok) {
         // TODO
     }
     Tcl_DStringFree(&dsFont);
     Tcl_DStringInit(&ds);
-    uniPtr = Tcl_UtfToUniCharDString(utf8, -1, &ds);
-
-    /* The fourth argument is a PointF object that contains the
-     * coordinates of the upper-left corner of the string.
-     * See GDI+ docs and the FontFamily for translating between
-     * design units and pixels.
-     */
-    float ascentPixels = font.GetSize() *
-            fontFamily.GetCellAscent(fontStyle) / fontFamily.GetEmHeight(fontStyle);
-    PointF point(x, y - ascentPixels);
-    if (gAntiAlias) {
-        mGraphics->SetTextRenderingHint(TextRenderingHintAntiAlias);
-    }
-    if (!fillOverStroke && GetColorFromPathColor(style->fill) != NULL) {
-        SolidBrush *brush = PathCreateBrush(style);
-        mGraphics->DrawString((const WCHAR *)uniPtr, Tcl_UniCharLen(uniPtr), &font, point, brush);
-        delete brush;
-    }
-    if (style->strokeColor != NULL) {
-        Pen    *pen = PathCreatePen(style);
-        mPath->AddString((const WCHAR *)uniPtr, Tcl_UniCharLen(uniPtr),
-                &fontFamily, fontStyle, (float) textStylePtr->fontSize, point, NULL);
-        mGraphics->DrawPath(pen, mPath);
-        delete pen;
-    }
-    if (fillOverStroke && GetColorFromPathColor(style->fill) != NULL) {
-        SolidBrush *brush = PathCreateBrush(style);
-        mGraphics->DrawString((const WCHAR *)uniPtr, Tcl_UniCharLen(uniPtr), &font, point, brush);
-        delete brush;
+    wcPtr = toWCharDS(utf8, &ds);
+    endPtr = wcPtr + Tcl_DStringLength(&ds) / sizeof (WCHAR);
+    while (wcPtr < endPtr) {
+        WCHAR *brkPtr = wcPtr;
+        while (brkPtr < endPtr) {
+            if (*brkPtr == '\n') {
+                break;
+            }
+            ++brkPtr;
+        }
+        /*
+         * The fourth argument is a PointF object that contains the
+         * coordinates of the upper-left corner of the string.
+         * See GDI+ docs and the FontFamily for translating between
+         * design units and pixels.
+         */
+        float ascentPixels = font.GetSize() *
+            fontFamily.GetCellAscent(fontStyle) /
+            fontFamily.GetEmHeight(fontStyle);
+        PointF point(x, y - ascentPixels);
+        if (gAntiAlias) {
+            mGraphics->SetTextRenderingHint(TextRenderingHintAntiAlias);
+        }
+        if (!fillOverStroke && GetColorFromPathColor(style->fill) != NULL) {
+            SolidBrush *brush = PathCreateBrush(style);
+            mGraphics->DrawString(wcPtr, brkPtr - wcPtr, &font, point, brush);
+            delete brush;
+        }
+        if (style->strokeColor != NULL) {
+            Pen *pen = PathCreatePen(style);
+            mPath->AddString(wcPtr, brkPtr - wcPtr, &fontFamily, fontStyle,
+                             (float) textStylePtr->fontSize, point, NULL);
+            mGraphics->DrawPath(pen, mPath);
+            delete pen;
+        }
+        if (fillOverStroke && GetColorFromPathColor(style->fill) != NULL) {
+            SolidBrush *brush = PathCreateBrush(style);
+            mGraphics->DrawString(wcPtr, brkPtr - wcPtr, &font, point, brush);
+            delete brush;
+        }
+        y += font.GetSize() *
+            (fontFamily.GetCellAscent(fontStyle) +
+             fontFamily.GetCellDescent(fontStyle)) /
+            fontFamily.GetEmHeight(fontStyle);
+        wcPtr = brkPtr + 1;
     }
     Tcl_DStringFree(&ds);
 }
 
-inline void PathC::CloseFigure()
+inline void
+PathC::CloseFigure()
 {
     mPath->CloseFigure();
     mCurrentPoint.X = mOrigin.X;
     mCurrentPoint.Y = mOrigin.Y;
 }
 
-inline void PathC::Stroke(Tk_PathStyle *style)
+inline void
+PathC::Stroke(Tk_PathStyle *style)
 {
     Pen *pen = PathCreatePen(style);
     mGraphics->DrawPath(pen, mPath);
     delete pen;
 }
 
-inline void PathC::Fill(Tk_PathStyle *style)
+inline void
+PathC::Fill(Tk_PathStyle *style)
 {
     SolidBrush *brush = PathCreateBrush(style);
     mGraphics->FillPath(brush, mPath);
     delete brush;
 }
 
-inline void PathC::FillAndStroke(Tk_PathStyle *style)
+inline void
+PathC::FillAndStroke(Tk_PathStyle *style)
 {
     Pen         *pen = PathCreatePen(style);
     SolidBrush     *brush = PathCreateBrush(style);
@@ -498,26 +632,31 @@ inline void PathC::FillAndStroke(Tk_PathStyle *style)
     delete brush;
 }
 
-inline void PathC::GetCurrentPoint(PointF *pt)
+inline void
+PathC::GetCurrentPoint(PointF *pt)
 {
     *pt = mCurrentPoint;
 }
 
-void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr)
+void
+PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr,
+                          int fillRule, double fillOpacity, TMatrix *mPtr)
 {
-    int                    i;
-    int                    nstops;
+    int                  i;
+    int                  nstops;
     float                x, y, width, height;
     GradientStop         *stop;
-    GradientStopArray     *stopArrPtr;
-    PathRect            *tPtr;
-    PointF                p1, p2, pstart, pend;
+    GradientStopArray    *stopArrPtr;
+    PathRect             *tPtr;
+    PointF               p1, p2, pstart, pend;
 
     /* Trim fillOpacity to [0,1] */
-    if (fillOpacity < 0.0)
+    if (fillOpacity < 0.0) {
         fillOpacity = 0.0;
-    if (fillOpacity > 1.0)
+    }
+    if (fillOpacity > 1.0) {
         fillOpacity = 1.0;
+    }
 
     stopArrPtr = fillPtr->stopArrPtr;
     nstops = stopArrPtr->nstops;
@@ -525,9 +664,9 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
 
     GraphicsContainer container = mGraphics->BeginContainer();
      /*
-     * We need to do like this since this is how SVG defines gradient drawing
-     * in case the transition vector is in relative coordinates.
-     */
+      * We need to do like this since this is how SVG defines gradient drawing
+      * in case the transition vector is in relative coordinates.
+      */
     if (fillPtr->units == kPathGradientUnitsBoundingBox) {
         x = float(bbox->x1);
         y = float(bbox->y1);
@@ -555,14 +694,16 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
         float length = float(hypot(p1.X - p2.X, p1.Y - p2.Y));
         int singular = 0;
         if (length < 1e-6) {
-            /* @@@ p1 and p2 essentially coincide.
-              *     Not sure what is the standard fallback here since
+            /*
+             * @@@ p1 and p2 essentially coincide.
+             *     Not sure what is the standard fallback here since
              *     we get no direction. Pick the x direction and make
              *     essentially a two color painting.
              */
             singular = 1;
         }
-        /* We need to put up two extra points that are outside
+        /*
+         * We need to put up two extra points that are outside
          * the bounding rectangle so that when used for gradient
          * start and stop points it will cover the bbox.
          */
@@ -570,7 +711,8 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
         Color *col = new Color[npts];
         REAL *pos = new REAL[npts];
 
-        /* We do the painting within a rectangle which is normally
+        /*
+         * We do the painting within a rectangle which is normally
          * the bounding box but if we do padding and have a gradient
          * transform we pick a "large enough" rectangle.
          */
@@ -605,7 +747,8 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
             pn.Y /= length;
         }
 
-        /* To find the start point we need to find the minimum
+        /*
+         * To find the start point we need to find the minimum
          * projection of the vector corner_i - p1 along pn.
          * Only if this is negative we need to extend the start point from p1.
          */
@@ -627,7 +770,10 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
             min = 0;
         }
 
-        /* Do the same for the end point but use p2 instead of p1 and find max. */
+        /*
+         * Do the same for the end point but use p2 instead
+         * of p1 and find max.
+         */
         for (i = 0; i < 4; i++) {
             ptmp = corner[i] - p2;
             dist = ptmp.X*pn.X + ptmp.Y*pn.Y;
@@ -648,7 +794,8 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
         pos[0] = 0.0;
         pos[npts-1] = 1.0;
 
-        /* Since we now have artificially extended the gradient transition
+        /*
+         * Since we now have artificially extended the gradient transition
          * we also need to rescale the (relative) stops values using
          * this extended transition:
          *              |min| + offset * length
@@ -659,12 +806,15 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
         float den = fabs(min) + length + fabs(max);
         for (i = 0; i < nstops; i++) {
             stop = stopArrPtr->stops[i];
-            col[i+1] = MakeGDIPlusColor(stop->color, stop->opacity * fillOpacity);
+            col[i+1] = MakeGDIPlusColor(stop->color,
+                                        stop->opacity * fillOpacity);
             pos[i+1] = (fabs(min) + REAL(stop->offset) * length)/den;
         }
         if (mPtr) {
             /* @@@ Not sure in which coord system we should do this. */
-            Matrix m(float(mPtr->a), float(mPtr->b), float(mPtr->c), float(mPtr->d), float(mPtr->tx), float(mPtr->ty));
+            Matrix m(float(mPtr->a), float(mPtr->b),
+                     float(mPtr->c), float(mPtr->d),
+                     float(mPtr->tx), float(mPtr->ty));
             brush.MultiplyTransform(&m);
         }
         brush.SetInterpolationColors(col, pos, npts);
@@ -677,7 +827,9 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
             brush.SetWrapMode(WrapModeTileFlipXY);
         }
         if (mPtr) {
-            Matrix m(float(mPtr->a), float(mPtr->b), float(mPtr->c), float(mPtr->d), float(mPtr->tx), float(mPtr->ty));
+            Matrix m(float(mPtr->a), float(mPtr->b),
+                     float(mPtr->c), float(mPtr->d),
+                     float(mPtr->tx), float(mPtr->ty));
             brush.MultiplyTransform(&m);
         }
         Color *col = new Color[nstops];
@@ -695,32 +847,35 @@ void PathC::FillLinearGradient(PathRect *bbox, LinearGradientFill *fillPtr, int 
     mGraphics->EndContainer(container);
 }
 
-void PathC::FillRadialGradient(
-        PathRect *bbox,     /* The items bounding box in untransformed coords. */
-        RadialGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr)
+void
+PathC::FillRadialGradient(PathRect *bbox, /* The items bbox box in untransformed coords. */
+                          RadialGradientFill *fillPtr, int fillRule,
+                          double fillOpacity, TMatrix *mPtr)
 {
-    int                    i;
-    int                    nstops;
+    int                  i;
+    int                  nstops;
     float                width, height;
     GradientStop         *stop;
-    GradientStopArray     *stopArrPtr;
-    RadialTransition    *tPtr;
-    PointF                center, radius, focal;
+    GradientStopArray    *stopArrPtr;
+    RadialTransition     *tPtr;
+    PointF               center, radius, focal;
 
     stopArrPtr = fillPtr->stopArrPtr;
     nstops = stopArrPtr->nstops;
     tPtr = fillPtr->radialPtr;
 
     /* Trim fillOpacity to [0,1] */
-    if (fillOpacity < 0.0)
+    if (fillOpacity < 0.0) {
         fillOpacity = 0.0;
-    if (fillOpacity > 1.0)
+    }
+    if (fillOpacity > 1.0) {
         fillOpacity = 1.0;
+    }
 
      /*
-     * We need to do like this since this is how SVG defines gradient drawing
-     * in case the transition vector is in relative coordinates.
-     */
+      * We need to do like this since this is how SVG defines gradient drawing
+      * in case the transition vector is in relative coordinates.
+      */
     width = float(bbox->x2 - bbox->x1);
     height = float(bbox->y2 - bbox->y1);
     if (fillPtr->units == kPathGradientUnitsBoundingBox) {
@@ -742,25 +897,32 @@ void PathC::FillRadialGradient(
     mGraphics->SetClip(mPath);
     // @@@ Extend the transition instead like we did for liner gradients above.
     stop = stopArrPtr->stops[nstops-1];
-    SolidBrush solidBrush(MakeGDIPlusColor(stop->color, stop->opacity * fillOpacity));
+    SolidBrush solidBrush(MakeGDIPlusColor(stop->color,
+                                           stop->opacity * fillOpacity));
     mGraphics->FillPath(&solidBrush, mPath);
 
-    /* This is a special trick to make a radial gradient pattern.
+    /*
+     * This is a special trick to make a radial gradient pattern.
      * Make an ellipse and use a PathGradientBrush.
      */
     GraphicsPath path;
-    path.AddEllipse(center.X - radius.X, center.Y - radius.Y, 2*radius.X, 2*radius.Y);
+    path.AddEllipse(center.X - radius.X, center.Y - radius.Y,
+                    2*radius.X, 2*radius.Y);
     PathGradientBrush brush(&path);
     if (mPtr) {
-        Matrix m(float(mPtr->a), float(mPtr->b), float(mPtr->c), float(mPtr->d), float(mPtr->tx), float(mPtr->ty));
+        Matrix m(float(mPtr->a), float(mPtr->b),
+                 float(mPtr->c), float(mPtr->d),
+                 float(mPtr->tx), float(mPtr->ty));
         brush.MultiplyTransform(&m);
     }
     stop = stopArrPtr->stops[0];
-    brush.SetCenterColor(MakeGDIPlusColor(stop->color, stop->opacity * fillOpacity));
+    brush.SetCenterColor(MakeGDIPlusColor(stop->color,
+                                          stop->opacity * fillOpacity));
     brush.SetCenterPoint(focal);
     int count = 1;
     stop = stopArrPtr->stops[nstops-1];
-    Color color = MakeGDIPlusColor(stop->color, stop->opacity * fillOpacity);
+    Color color = MakeGDIPlusColor(stop->color,
+                                   stop->opacity * fillOpacity);
     brush.SetSurroundColors(&color, &count);
 
     /* gdi+ counts them from the border and not from the center. */
@@ -782,18 +944,13 @@ void PathC::FillRadialGradient(
  * Exit procedure for Tcl.
  */
 
-void PathExit(ClientData clientData)
+void
+PathExit(ClientData clientData)
 {
     if (sGdiplusStarted) {
         GdiplusShutdown(sGdiplusToken);
     }
 }
-
-/* === EB - 23-apr-2010: added function to register coordinate offsets; unneeded here (?) */
-void TkPathSetCoordOffsets(double dx, double dy)
-{
-}
-/* === */
 
 /*
  * Standard tkpath interface.
@@ -801,9 +958,12 @@ void TkPathSetCoordOffsets(double dx, double dy)
  * Is there a smarter way?
  */
 
-TkPathContext TkPathInit(Tk_Window tkwin, Drawable d)
+TkPathContext
+TkPathInit(Tk_Window tkwin, Drawable d)
 {
-    TkPathContext_ *context = reinterpret_cast<TkPathContext_ *> (ckalloc((unsigned) (sizeof(TkPathContext_))));
+    TkPathContext_ *context =
+        reinterpret_cast<TkPathContext_ *> (ckalloc((unsigned)
+                                                    (sizeof(TkPathContext_))));
     TkWinDrawable *twdPtr = (TkWinDrawable *) d;
     HDC memHdc;
     //TkWinDrawable *twdPtr = reinterpret_cast<TkWinDrawable*>(d);
@@ -814,7 +974,10 @@ TkPathContext TkPathInit(Tk_Window tkwin, Drawable d)
     TkWinReleaseDrawableDC(d, hdc, &dcState);
     */
 
-    /* This will only work for bitmaps; need something else! TkWinGetDrawableDC()? */
+    /*
+     * This will only work for bitmaps; need something else!
+     * TkWinGetDrawableDC()?
+     */
     memHdc = CreateCompatibleDC(NULL);
     SelectObject(memHdc, twdPtr->bitmap.handle);
     context->c = new PathC(memHdc);
@@ -823,10 +986,14 @@ TkPathContext TkPathInit(Tk_Window tkwin, Drawable d)
     return (TkPathContext) context;
 }
 
-TkPathContext TkPathInitSurface(int width, int height)
+TkPathContext
+TkPathInitSurface(Display *display, int width, int height)
 {
-    TkPathContext_ *context = reinterpret_cast<TkPathContext_ *> (ckalloc((unsigned) (sizeof(TkPathContext_))));
-    PathSurfaceGDIpRecord *surface = (PathSurfaceGDIpRecord *) ckalloc((unsigned) (sizeof(PathSurfaceGDIpRecord)));
+    TkPathContext_ *context =
+        reinterpret_cast<TkPathContext_ *> (ckalloc((unsigned)
+                                                    (sizeof(TkPathContext_))));
+    PathSurfaceGDIpRecord *surface = (PathSurfaceGDIpRecord *)
+        ckalloc((unsigned) (sizeof(PathSurfaceGDIpRecord)));
     HBITMAP hbm = NULL;
     HDC memHdc = NULL;
     BITMAPINFO *bmInfo = NULL;
@@ -836,6 +1003,7 @@ TkPathContext TkPathInitSurface(int width, int height)
 
     /* We create off-screen surfaces as DIBs */
     bmInfo = (BITMAPINFO *) ckalloc(sizeof(BITMAPINFO));
+    memset(bmInfo, 0, sizeof (BITMAPINFO));
     bmInfo->bmiHeader.biSize               = sizeof(BITMAPINFOHEADER);
     bmInfo->bmiHeader.biWidth              = width;
     bmInfo->bmiHeader.biHeight             = -(int) height;
@@ -844,9 +1012,9 @@ TkPathContext TkPathInitSurface(int width, int height)
     bmInfo->bmiHeader.biCompression        = BI_RGB;
     bmInfo->bmiHeader.biSizeImage          = 0;
     bmInfo->bmiHeader.biXPelsPerMeter      =
-                            static_cast<LONG>(72. / 0.0254); /* unused here */
+        static_cast<LONG>(72. / 0.0254); /* unused here */
     bmInfo->bmiHeader.biYPelsPerMeter      =
-                            static_cast<LONG>(72. / 0.0254); /* unused here */
+        static_cast<LONG>(72. / 0.0254); /* unused here */
     bmInfo->bmiHeader.biClrUsed            = 0;
     bmInfo->bmiHeader.biClrImportant       = 0;
 
@@ -873,7 +1041,8 @@ TkPathContext TkPathInitSurface(int width, int height)
     return (TkPathContext) context;
 }
 
-void TkPathPushTMatrix(TkPathContext ctx, TMatrix *m)
+void
+TkPathPushTMatrix(TkPathContext ctx, TMatrix *m)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     if (m == NULL) {
@@ -882,78 +1051,93 @@ void TkPathPushTMatrix(TkPathContext ctx, TMatrix *m)
     context->c->PushTMatrix(m);
 }
 
-void TkPathSaveState(TkPathContext ctx)
+void
+TkPathSaveState(TkPathContext ctx)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->SaveState();
 }
 
-void TkPathRestoreState(TkPathContext ctx)
+void
+TkPathRestoreState(TkPathContext ctx)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->RestoreState();
 }
 
-void TkPathBeginPath(TkPathContext ctx, Tk_PathStyle *style)
+void
+TkPathBeginPath(TkPathContext ctx, Tk_PathStyle *style)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->BeginPath(style);
 }
 
-void TkPathMoveTo(TkPathContext ctx, double x, double y)
+void
+TkPathMoveTo(TkPathContext ctx, double x, double y)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->MoveTo((float) x, (float) y);
 }
 
-void TkPathLineTo(TkPathContext ctx, double x, double y)
+void
+TkPathLineTo(TkPathContext ctx, double x, double y)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->LineTo((float) x, (float) y);
 }
 
-void TkPathLinesTo(TkPathContext ctx, double *pts, int n)
+void
+TkPathLinesTo(TkPathContext ctx, double *pts, int n)
 {
     /* @@@ TODO */
 }
 
-void TkPathQuadBezier(TkPathContext ctx, double ctrlX, double ctrlY, double x, double y)
+void
+TkPathQuadBezier(TkPathContext ctx, double ctrlX, double ctrlY,
+                 double x, double y)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     double x31, y31, x32, y32;
     PointF cp;
 
     context->c->GetCurrentPoint(&cp);
-    // conversion of quadratic bezier curve to cubic bezier curve: (mozilla/svg)
-    /* Unchecked! Must be an approximation! */
+    /*
+     * Conversion of quadratic bezier curve to cubic bezier curve: (mozilla/svg)
+     * Unchecked! Must be an approximation!
+     */
     x31 = cp.X + (ctrlX - cp.X) * 2 / 3;
     y31 = cp.Y + (ctrlY - cp.Y) * 2 / 3;
     x32 = ctrlX + (x - ctrlX) / 3;
     y32 = ctrlY + (y - ctrlY) / 3;
-    context->c->CurveTo((float) x31, (float) y31, (float) x32, (float) y32, (float) x, (float) y);
+    context->c->CurveTo((float) x31, (float) y31,
+                        (float) x32, (float) y32, (float) x, (float) y);
 }
 
-void TkPathCurveTo(TkPathContext ctx, double ctrlX1, double ctrlY1,
-        double ctrlX2, double ctrlY2, double x, double y)
+void
+TkPathCurveTo(TkPathContext ctx, double ctrlX1, double ctrlY1,
+              double ctrlX2, double ctrlY2, double x, double y)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
-    context->c->CurveTo((float) ctrlX1, (float) ctrlY1, (float) ctrlX2, (float) ctrlY2, (float) x, (float) y);
+    context->c->CurveTo((float) ctrlX1, (float) ctrlY1,
+                        (float) ctrlX2, (float) ctrlY2, (float) x, (float) y);
 }
 
-
-void TkPathArcTo(TkPathContext ctx,
-        double rx, double ry,
-        double phiDegrees,     /* The rotation angle in degrees! */
-        char largeArcFlag, char sweepFlag, double x, double y)
+void
+TkPathArcTo(TkPathContext ctx,
+            double rx, double ry,
+            double phiDegrees,     /* The rotation angle in degrees! */
+            char largeArcFlag, char sweepFlag, double x, double y)
 {
-    TkPathArcToUsingBezier(ctx, rx, ry, phiDegrees, largeArcFlag, sweepFlag, x, y);
+    TkPathArcToUsingBezier(ctx, rx, ry, phiDegrees, largeArcFlag,
+                           sweepFlag, x, y);
 }
 
 void
 TkPathRect(TkPathContext ctx, double x, double y, double width, double height)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
-    context->c->AddRectangle((float) x, (float) y, (float) width, (float) height);
+    context->c->AddRectangle((float) x, (float) y,
+                             (float) width, (float) height);
 }
 
 void
@@ -965,11 +1149,15 @@ TkPathOval(TkPathContext ctx, double cx, double cy, double rx, double ry)
 
 void
 TkPathImage(TkPathContext ctx, Tk_Image image, Tk_PhotoHandle photo,
-        double x, double y, double width, double height, double fillOpacity,
-        XColor *tintColor, double tintAmount, int interpolation, PathRect *srcRegion)
+            double x, double y, double width, double height,
+            double fillOpacity, XColor *tintColor, double tintAmount,
+            int interpolation, PathRect *srcRegion)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
-    context->c->DrawImage(photo, (float) x, (float) y, (float) width, (float) height, fillOpacity, tintColor, tintAmount, interpolation, srcRegion);
+    context->c->DrawImage(photo, (float) x, (float) y,
+                          (float) width, (float) height,
+                          fillOpacity, tintColor, tintAmount,
+                          interpolation, srcRegion);
 }
 
 void
@@ -980,17 +1168,24 @@ TkPathClosePath(TkPathContext ctx)
 }
 
 int
-TkPathTextConfig(Tcl_Interp *interp, Tk_PathTextStyle *textStylePtr, char *utf8, void **customPtr)
+TkPathTextConfig(Tcl_Interp *interp, Tk_PathTextStyle *textStylePtr,
+                 char *utf8, void **customPtr)
 {
-    // @@@ We could think of having the FontFamily and Gdiplus::Font cached in custom.
+    /*
+     * @@@ We could think of having the FontFamily and
+     *     Gdiplus::Font cached in custom.
+     */
     return TCL_OK;
 }
 
 void
-TkPathTextDraw(TkPathContext ctx, Tk_PathStyle *style, Tk_PathTextStyle *textStylePtr, double x, double y, int fillOverStroke, char *utf8, void *custom)
+TkPathTextDraw(TkPathContext ctx, Tk_PathStyle *style,
+               Tk_PathTextStyle *textStylePtr, double x, double y,
+               int fillOverStroke, char *utf8, void *custom)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
-    context->c->DrawString(style, textStylePtr, (float) x, (float) y, fillOverStroke, utf8);
+    context->c->DrawString(style, textStylePtr, (float) x, (float) y,
+                           fillOverStroke, utf8);
 }
 
 void
@@ -1000,11 +1195,12 @@ TkPathTextFree(Tk_PathTextStyle *textStylePtr, void *custom)
 }
 
 PathRect
-TkPathTextMeasureBbox(Tk_PathTextStyle *textStylePtr, char *utf8, void *custom)
+TkPathTextMeasureBbox(Display *display, Tk_PathTextStyle *textStylePtr,
+                      char *utf8, void *custom)
 {
     HDC memHdc;
     Tcl_DString ds, dsFont;
-    Tcl_UniChar *uniPtr = NULL;
+    WCHAR *wcPtr, *endPtr;
     PointF origin(0.0f, 0.0f);
     RectF bounds;
     PathRect r = {-1, -1, -1, -1};
@@ -1015,33 +1211,56 @@ TkPathTextMeasureBbox(Tk_PathTextStyle *textStylePtr, char *utf8, void *custom)
         InitGDIplus();
     }
     memHdc = CreateCompatibleDC(NULL);
-    /* @@@ I thought this was needed but seems not.
-    HBITMAP bm = CreateCompatibleBitmap(memHdc, 10, 10);
-    SelectObject(memHdc, bm);
-    */
+    /*
+     * @@@ I thought this was needed but seems not.
+     *     HBITMAP bm = CreateCompatibleBitmap(memHdc, 10, 10);
+     *     SelectObject(memHdc, bm);
+     */
     graphics = new Graphics(memHdc);
 
     Tcl_DStringInit(&dsFont);
-    FontFamily fontFamily((const WCHAR *)Tcl_UtfToUniCharDString(textStylePtr->fontFamily, -1, &dsFont));
+    FontFamily fontFamily((const WCHAR *)
+                          Tcl_WinUtfToTChar(textStylePtr->fontFamily,
+                                            -1, &dsFont));
     if (fontFamily.GetLastStatus() != Ok) {
         fontFamily.GenericSansSerif();
     }
     int fontStyle = canvasTextStyle2GdiPlusTextStyle(textStylePtr);
-    Gdiplus::Font font(&fontFamily, (float) textStylePtr->fontSize, fontStyle, UnitPixel);
+    Gdiplus::Font font(&fontFamily, (float) textStylePtr->fontSize,
+                       fontStyle, UnitPixel);
     if (font.GetLastStatus() != Ok) {
         // TODO
     }
     Tcl_DStringFree(&dsFont);
     Tcl_DStringInit(&ds);
-    uniPtr = Tcl_UtfToUniCharDString(utf8, -1, &ds);
-    graphics->MeasureString((const WCHAR *)uniPtr, Tcl_UniCharLen(uniPtr), &font, origin, &bounds);
-    Tcl_DStringFree(&ds);
+    wcPtr = toWCharDS(utf8, &ds);
+    endPtr = wcPtr + Tcl_DStringLength(&ds) / sizeof (WCHAR);
     ascent = font.GetSize() *
-           fontFamily.GetCellAscent(fontStyle) / fontFamily.GetEmHeight(fontStyle);
+        fontFamily.GetCellAscent(fontStyle) /
+        fontFamily.GetEmHeight(fontStyle);
     r.x1 = 0.0;
+    r.x2 = 0.0;
     r.y1 = -ascent;
-    r.x2 = bounds.Width;
-    r.y2 = bounds.Height - ascent;
+    while (wcPtr < endPtr) {
+        WCHAR *brkPtr = wcPtr;
+        while (brkPtr < endPtr) {
+            if (*brkPtr == '\n') {
+                break;
+            }
+            ++brkPtr;
+        }
+        graphics->MeasureString(wcPtr, brkPtr - wcPtr, &font, origin, &bounds);
+        if (bounds.Width > r.x2) {
+            r.x2 = bounds.Width;
+        }
+        r.y2 += font.GetSize() *
+            (fontFamily.GetCellAscent(fontStyle) +
+             fontFamily.GetCellDescent(fontStyle)) /
+            fontFamily.GetEmHeight(fontStyle);
+        wcPtr = brkPtr + 1;
+    }
+    r.y2 -= ascent;
+    Tcl_DStringFree(&ds);
     delete graphics;
     // DeleteObject(bm);
     DeleteDC(memHdc);
@@ -1049,7 +1268,8 @@ TkPathTextMeasureBbox(Tk_PathTextStyle *textStylePtr, char *utf8, void *custom)
 }
 
 void
-TkPathSurfaceErase(TkPathContext ctx, double dx, double dy, double dwidth, double dheight)
+TkPathSurfaceErase(TkPathContext ctx, double dx, double dy,
+                   double dwidth, double dheight)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     PathSurfaceGDIpRecord *surface = context->surface;
@@ -1084,7 +1304,8 @@ TkPathSurfaceErase(TkPathContext ctx, double dx, double dy, double dwidth, doubl
 }
 
 void
-TkPathSurfaceToPhoto(Tcl_Interp *interp, TkPathContext ctx, Tk_PhotoHandle photo)
+TkPathSurfaceToPhoto(Tcl_Interp *interp, TkPathContext ctx,
+                     Tk_PhotoHandle photo)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     PathSurfaceGDIpRecord *surface = context->surface;
@@ -1102,7 +1323,8 @@ TkPathSurfaceToPhoto(Tcl_Interp *interp, TkPathContext ctx, Tk_PhotoHandle photo
     Tk_PhotoGetImage(photo, &block);
     pixel = (unsigned char *)ckalloc(height*bytesPerRow);
     if (gSurfaceCopyPremultiplyAlpha) {
-        PathCopyBitsPremultipliedAlphaBGRA(data, pixel, width, height, bytesPerRow);
+        PathCopyBitsPremultipliedAlphaBGRA(data, pixel, width, height,
+                                           bytesPerRow);
     } else {
         PathCopyBitsBGRA(data, pixel, width, height, bytesPerRow);
     }
@@ -1115,7 +1337,8 @@ TkPathSurfaceToPhoto(Tcl_Interp *interp, TkPathContext ctx, Tk_PhotoHandle photo
     block.offset[1] = 1;
     block.offset[2] = 2;
     block.offset[3] = 3;
-    Tk_PhotoPutBlock(interp, photo, &block, 0, 0, width, height, TK_PHOTO_COMPOSITE_OVERLAY);
+    Tk_PhotoPutBlock(interp, photo, &block, 0, 0, width, height,
+                     TK_PHOTO_COMPOSITE_OVERLAY);
 }
 
 void
@@ -1137,35 +1360,41 @@ TkPathFree(TkPathContext ctx)
     ckfree((char *) context);
 }
 
-void TkPathClipToPath(TkPathContext ctx, int fillRule)
+void
+TkPathClipToPath(TkPathContext ctx, int fillRule)
 {
     /* empty */
 }
 
-void TkPathReleaseClipToPath(TkPathContext ctx)
+void
+TkPathReleaseClipToPath(TkPathContext ctx)
 {
     /* empty */
 }
 
-void TkPathStroke(TkPathContext ctx, Tk_PathStyle *style)
+void
+TkPathStroke(TkPathContext ctx, Tk_PathStyle *style)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->Stroke(style);
 }
 
-void TkPathFill(TkPathContext ctx, Tk_PathStyle *style)
+void
+TkPathFill(TkPathContext ctx, Tk_PathStyle *style)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->Fill(style);
 }
 
-void TkPathFillAndStroke(TkPathContext ctx, Tk_PathStyle *style)
+void
+TkPathFillAndStroke(TkPathContext ctx, Tk_PathStyle *style)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->FillAndStroke(style);
 }
 
-int TkPathGetCurrentPosition(TkPathContext ctx, PathPoint *ptPtr)
+int
+TkPathGetCurrentPosition(TkPathContext ctx, PathPoint *ptPtr)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     PointF pf;
@@ -1189,17 +1418,28 @@ TkPathPixelAlign(void)
 
 /* @@@ INCOMPLETE! We need to consider any padding as well. */
 
-void TkPathPaintLinearGradient(TkPathContext ctx, PathRect *bbox, LinearGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr)
+void
+TkPathPaintLinearGradient(TkPathContext ctx, PathRect *bbox,
+                          LinearGradientFill *fillPtr, int fillRule,
+                          double fillOpacity, TMatrix *mPtr)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->FillLinearGradient(bbox, fillPtr, fillRule, fillOpacity, mPtr);
 }
 
 void
-TkPathPaintRadialGradient(TkPathContext ctx, PathRect *bbox, RadialGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr)
+TkPathPaintRadialGradient(TkPathContext ctx, PathRect *bbox,
+                          RadialGradientFill *fillPtr, int fillRule,
+                          double fillOpacity, TMatrix *mPtr)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     context->c->FillRadialGradient(bbox, fillPtr, fillRule, fillOpacity, mPtr);
 }
 
-
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

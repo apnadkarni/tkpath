@@ -7,15 +7,14 @@
  *
  * TODO: o Add tkwin option here and there so we can free stop colors!
  *
- * $Id$
  */
 
 #include "tkIntPath.h"
 #include "tkpCanvas.h"
 
-static char *	kGradientNameBase = "gradient";
+static const char *kGradientNameBase = "gradient";
 
-static CONST char *gradientCmds[] = {
+static const char *gradientCmds[] = {
     "cget", "configure", "create", "delete", "inuse", "names", "type",
     (char *) NULL
 };
@@ -35,7 +34,7 @@ enum {
  *
  * CanvasGradientObjCmd --
  *
- *	Implements the 'pathName gradient' command using the canvas local state.  
+ *	Implements the 'pathName gradient' command using the canvas local state.
  *
  * Results:
  *	Standard Tcl result
@@ -46,13 +45,13 @@ enum {
  *----------------------------------------------------------------------
  */
 
-int 				
-CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr, 
-	int objc, Tcl_Obj* CONST objv[])
+int
+CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
+	int objc, Tcl_Obj* const objv[])
 {
     int index;
     int result = TCL_OK;
-    
+
     /*
      * objv[2] is the subcommand: cget | configure | create | delete | names | type
      */
@@ -65,8 +64,8 @@ CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
         return TCL_ERROR;
     }
     switch (index) {
-	    
-        case kPathGradientCmdCget: {            
+
+        case kPathGradientCmdCget: {
 	    if (objc != 5) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name option");
 		return TCL_ERROR;
@@ -75,17 +74,17 @@ CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 		    &canvasPtr->gradientTable);
             break;
         }
-	    
+
         case kPathGradientCmdConfigure: {
 	    if (objc < 4) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name ?option? ?value option value...?");
 		return TCL_ERROR;
 	    }
-	    result = PathGradientConfigure(interp, canvasPtr->tkwin, objc-3, objv+3, 
+	    result = PathGradientConfigure(interp, canvasPtr->tkwin, objc-3, objv+3,
 		    &canvasPtr->gradientTable);
             break;
         }
-	    
+
         case kPathGradientCmdCreate: {
 	    char str[255];
 
@@ -94,11 +93,11 @@ CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 		return TCL_ERROR;
 	    }
             sprintf(str, "%s%d", kGradientNameBase, canvasPtr->gradientUid++);
-	    result = PathGradientCreate(interp, canvasPtr->tkwin, objc-3, objv+3, 
+	    result = PathGradientCreate(interp, canvasPtr->tkwin, objc-3, objv+3,
 		    &canvasPtr->gradientTable, str);
             break;
         }
-	    
+
         case kPathGradientCmdDelete: {
 	    if (objc != 4) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name");
@@ -116,7 +115,7 @@ CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 	    result = PathGradientInUse(interp, objv[3], &canvasPtr->gradientTable);
 	    break;
 	}
-	    
+
         case kPathGradientCmdNames: {
 	    if (objc != 3) {
 		Tcl_WrongNumArgs(interp, 3, objv, NULL);
@@ -125,7 +124,7 @@ CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 	    PathGradientNames(interp, &canvasPtr->gradientTable);
             break;
         }
-	    
+
         case kPathGradientCmdType: {
 	    if (objc != 4) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name");
@@ -138,9 +137,9 @@ CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
     return result;
 }
 
-/* 
+/*
  * CanvasGradientsFree --
- *	
+ *
  *	Used by canvas Destroy handler to clean up all gradients.
  *	Note that items clean up all their gradient instances themeselves.
  */
@@ -155,8 +154,15 @@ CanvasGradientsFree(TkPathCanvas *canvasPtr)
     while (hPtr != NULL) {
 	gradientPtr = (TkPathGradientMaster*) Tcl_GetHashValue(hPtr);
 	Tcl_DeleteHashEntry(hPtr);
-	PathGradientMasterFree(gradientPtr); 
+	PathGradientMasterFree(gradientPtr);
 	hPtr = Tcl_NextHashEntry(&search);
     }
 }
-
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

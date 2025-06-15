@@ -6,26 +6,15 @@
 # Copyright (c) 1998-1999 by Scriptics Corporation.
 # All rights reserved.
 #
-# RCS: @(#) $Id$
 
-package require tcltest 2.1
-eval tcltest::configure $argv
-tcltest::loadTestedCommands
-
-tkp::canvas .c -width 400 -height 300 -bd 2 -relief sunken
-pack .c
-update
-
-set i 1
-.c create text 20 20 -tag test
 
 set font "-adobe-times-medium-r-normal--*-200-*-*-*-*-*-*"
 set ay [font metrics $font -linespace]
 set ax [font measure $font 0]
 
-
+set i 1
 foreach test {
-    {-anchor nw nw xyz {bad anchor position "xyz": must be n, ne, e, se, s, sw, w, nw, or center}}
+    {-anchor nw nw xyz {bad anchor "xyz": must be n, ne, e, se, s, sw, w, nw, or center}}
     {-fill #ff0000 #ff0000 xyz {unknown color name "xyz"}}
     {-fill {} {} {} {}}
     {-font {Times 40} {Times 40} {} {font "" doesn't exist}}
@@ -37,86 +26,166 @@ foreach test {
     {-width 6 6 xyz {bad screen distance "xyz"}}
 } {
     lassign $test name goodValue goodResult badValue badResult
-    test canvText-1.$i "configuration options: good value for $name" {
-	.c itemconfigure test $name $goodValue
-	list [lindex [.c itemconfigure test $name] 4] [.c itemcget test $name]
-    } [list $goodResult $goodResult]
+    test canvText-1.$i "configuration options: good value for $name" \
+-setup ::tkp_setup \
+-result [list $goodResult $goodResult] \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfigure test $name $goodValue
+    list [lindex [.c itemconfigure test $name] 4] [.c itemcget test $name]
+}
     incr i
     if {$badValue ne ""} {
-	test canvText-1.$i "configuration options: bad value for $name" -body {
-	    .c itemconfigure test $name $badValue
-	} -returnCodes error -result $badResult
+	test canvText-1.$i "configuration options: bad value for $name" \
+-setup ::tkp_setup \
+-returnCodes error \
+-result $badResult \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfigure test $name $badValue
+}
     }
     incr i
 }
-test canvText-1.$i {configuration options} {
+
+test canvText-1.$i {configuration options} \
+-setup ::tkp_setup \
+-result {test xyz} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfigure test -tags {test xyz}
     .c itemcget xyz -tags
-} {test xyz}
+}
 
-.c delete test
-.c create text 20 20 -tag test
-
-test canvText-2.1 {CreateText procedure: args} {
+test canvText-2.1 {CreateText procedure: args} \
+-setup ::tkp_setup \
+-result {1 {wrong # args: should be ".c create text coords ?arg arg ...?"}} \
+-body {
+    .c create text 20 20 -tag test
     list [catch {.c create text} msg] $msg
-} {1 {wrong # args: should be ".c create text coords ?arg arg ...?"}}
-test canvText-2.2 {CreateText procedure: args} {
+}
+
+
+test canvText-2.2 {CreateText procedure: args} \
+-setup ::tkp_setup \
+-result {1 {bad screen distance "xyz"}} \
+-body {
     list [catch {.c create text xyz 0} msg] $msg
-} {1 {bad screen distance "xyz"}}
-test canvText-2.3 {CreateText procedure: args} {
+}
+
+test canvText-2.3 {CreateText procedure: args} \
+-setup ::tkp_setup \
+-result {1 {bad screen distance "xyz"}} \
+-body {
     list [catch {.c create text 0 xyz} msg] $msg
-} {1 {bad screen distance "xyz"}}
-test canvText-2.4 {CreateText procedure: args} {
+}
+
+test canvText-2.4 {CreateText procedure: args} \
+-setup ::tkp_setup \
+-result {1 {unknown option "-xyz"}} \
+-body {
     list [catch {.c create text 0 0 -xyz xyz} msg] $msg
-} {1 {unknown option "-xyz"}}
-test canvText-2.5 {CreateText procedure} {
+}
+
+test canvText-2.5 {CreateText procedure} \
+-setup ::tkp_setup \
+-result {0.0 0.0} \
+-body {
     .c create text 0 0 -tags x
     set x [.c coords x]
     .c delete x
     set x
-} {0.0 0.0}
+}
 
-focus -force .c
-.c focus test
-.c coords test 0 0
-update
-
-test canvText-3.1 {TextCoords procedure} {
+test canvText-3.1 {TextCoords procedure} \
+-setup ::tkp_setup \
+-result {0.0 0.0} \
+-body {
+    .c create text 20 20 -tag test
+    focus -force .c
+    .c focus test
+    .c coords test 0 0
+    update
     .c coords test
-} {0.0 0.0}
-test canvText-3.2 {TextCoords procedure} {
+}
+
+test canvText-3.2 {TextCoords procedure} \
+-setup ::tkp_setup \
+-result {1 {bad screen distance "xyz"}} \
+-body {
+    .c create text 20 20 -tag test
     list [catch {.c coords test xyz 0} msg] $msg
-} {1 {bad screen distance "xyz"}}
-test canvText-3.3 {TextCoords procedure} {
+}
+
+test canvText-3.3 {TextCoords procedure} \
+-setup ::tkp_setup \
+-result {1 {bad screen distance "xyz"}} \
+-body {
+    .c create text 20 20 -tag test
     list [catch {.c coords test 0 xyz} msg] $msg
-} {1 {bad screen distance "xyz"}}
-test canvText-3.4 {TextCoords procedure} {
+}
+
+test canvText-3.4 {TextCoords procedure} \
+-setup ::tkp_setup \
+-result {10.0 10.0} \
+-body {
+    .c create text 20 20 -tag test
     .c coords test 10 10
     set result {}
     foreach element [.c coords test] {
 	lappend result [format %.1f $element]
     }
     set result
-} {10.0 10.0}
-test canvText-3.5 {TextCoords procedure} {
-    list [catch {.c coords test 10} msg] $msg
-} {1 {wrong # coordinates: expected 2, got 1}}
-test canvText-3.6 {TextCoords procedure} {
-    list [catch {.c coords test 10 10 10} msg] $msg
-} {1 {wrong # coordinates: expected 0 or 2, got 3}}
+}
 
-test canvText-4.1 {ConfigureText procedure} {
+test canvText-3.5 {TextCoords procedure} \
+-setup ::tkp_setup \
+-result {1 {wrong # coordinates: expected 2, got 1}} \
+-body {
+    .c create text 20 20 -tag test
+    list [catch {.c coords test 10} msg] $msg
+}
+
+test canvText-3.6 {TextCoords procedure} \
+-setup ::tkp_setup \
+-result {1 {wrong # coordinates: expected 0 or 2, got 3}} \
+-body {
+    .c create text 20 20 -tag test
+    list [catch {.c coords test 10 10 10} msg] $msg
+}
+
+
+test canvText-4.1 {ConfigureText procedure} \
+-setup ::tkp_setup \
+-result {1 {unknown color name "xyz"}} \
+-body {
+    .c create text 20 20 -tag test
     list [catch {.c itemconfig test -fill xyz} msg] $msg
-} {1 {unknown color name "xyz"}}
-test canvText-4.2 {ConfigureText procedure} {
+}
+
+test canvText-4.2 {ConfigureText procedure} \
+-setup ::tkp_setup \
+-result {blue} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -fill blue
     .c itemcget test -fill
-} {blue}
-test canvText-4.3 {ConfigureText procedure: construct font gcs} {
+}
+
+test canvText-4.3 {ConfigureText procedure: construct font gcs} \
+-setup ::tkp_setup \
+-result {{times 20} black gray50} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -font "times 20" -fill black -stipple gray50
     list [.c itemcget test -font] [.c itemcget test -fill] [.c itemcget test -stipple]
-} {{times 20} black gray50}
-test canvText-4.4 {ConfigureText procedure: construct cursor gc} {
+}
+
+test canvText-4.4 {ConfigureText procedure: construct cursor gc} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select from test 2
     .c select to test 4
@@ -133,8 +202,13 @@ test canvText-4.4 {ConfigureText procedure: construct cursor gc} {
     .c config -selectbackground red
     .c itemconfig test -just left
     update
-} {}
-test canvText-4.5 {ConfigureText procedure: adjust selection} {
+}
+
+test canvText-4.5 {ConfigureText procedure: adjust selection} \
+-setup ::tkp_setup \
+-result {cdefg 1 cdefg cd cdef cd} \
+-body {
+    .c create text 20 20 -tag test
     set x {}
     .c itemconfig test -text "abcdefghi"
     .c select from test 2
@@ -154,21 +228,44 @@ test canvText-4.5 {ConfigureText procedure: adjust selection} {
     lappend x [selection get]
     .c dchars test 4 end
     lappend x [selection get]
-} {cdefg 1 cdefg cd cdef cd}
-test canvText-4.6 {ConfigureText procedure: adjust cursor} {
+}
+
+test canvText-4.6 {ConfigureText procedure: adjust cursor} \
+-setup ::tkp_setup \
+-result {4} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghi"
     set x {}
     .c icursor test 6
     .c dchars test 4 end
     .c index test insert
-} {4}
+}
 
-test canvText-5.1 {ConfigureText procedure: adjust cursor} {
+
+test canvText-5.1 {ConfigureText procedure: adjust cursor} \
+-setup ::tkp_setup \
+-result {} \
+-body {
     .c create text 10 10 -tag x -fill blue -font "times 40" -stipple gray50 -text "xyz"
     .c delete x
-} {}
+}
 
-test canvText-6.1 {ComputeTextBbox procedure} {fonts nonPortable} {
+
+test canvText-6.1 {ComputeTextBbox procedure} \
+-constraints {fonts nonPortable} \
+-setup ::tkp_setup \
+-result "{[expr -$ax/2-1] 0 [expr $ax/2+1] $ay} \
+{-1 0 [expr $ax+1] $ay} \
+{-1 [expr -$ay/2] [expr $ax+1] [expr $ay/2]} \
+{-1 -$ay [expr $ax+1] 0} \
+{[expr -$ax/2-1] -$ay [expr $ax/2+1] 0} \
+{[expr -$ax-1] -$ay 1 0} \
+{[expr -$ax-1] [expr -$ay/2] 1 [expr $ay/2]} \
+{[expr -$ax-1] 0 1 $ay} \
+{[expr -$ax/2-1] [expr -$ay/2] [expr $ax/2+1] [expr $ay/2]}" \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -font $font -text 0
     .c coords test 0 0
     set x {}
@@ -181,61 +278,118 @@ test canvText-6.1 {ComputeTextBbox procedure} {fonts nonPortable} {
     lappend x [.c itemconfig test -anchor e; .c bbox test]
     lappend x [.c itemconfig test -anchor ne; .c bbox test]
     lappend x [.c itemconfig test -anchor center; .c bbox test]
-} "{[expr -$ax/2-1] 0 [expr $ax/2+1] $ay}\
-{-1 0 [expr $ax+1] $ay}\
-{-1 [expr -$ay/2] [expr $ax+1] [expr $ay/2]}\
-{-1 -$ay [expr $ax+1] 0}\
-{[expr -$ax/2-1] -$ay [expr $ax/2+1] 0}\
-{[expr -$ax-1] -$ay 1 0}\
-{[expr -$ax-1] [expr -$ay/2] 1 [expr $ay/2]}\
-{[expr -$ax-1] 0 1 $ay}\
-{[expr -$ax/2-1] [expr -$ay/2] [expr $ax/2+1] [expr $ay/2]}"
+}
 
-focus .c
-.c focus test
-.c itemconfig test -text "abcd\nefghi\njklmnopq"
-test canvText-7.0 {DisplayText procedure: stippling} {
+
+test canvText-7.0 {DisplayText procedure: stippling} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c itemconfig test -stipple gray50
     update
     .c itemconfig test -stipple {}
     update
-} {}
-test canvText-7.2 {DisplayText procedure: draw selection} {
+}
+
+test canvText-7.2 {DisplayText procedure: draw selection} \
+-setup ::tkp_setup \
+-result "abcd\nefghi\njklmnopq" \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c select from test 0
     .c select to test end
     update
     selection get
-} "abcd\nefghi\njklmnopq"
-test canvText-7.3 {DisplayText procedure: selection} {
+}
+
+test canvText-7.3 {DisplayText procedure: selection} \
+-setup ::tkp_setup \
+-result "abcd\nefghi\njklmnopq" \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c select from test 0
     .c select to test end
     update
     selection get
-} "abcd\nefghi\njklmnopq"
-test canvText-7.4 {DisplayText procedure: one line selection} {
+}
+
+test canvText-7.4 {DisplayText procedure: one line selection} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c select from test 2
     .c select to test 3
     update
-} {}
-test canvText-7.5 {DisplayText procedure: multi-line selection} {
+}
+
+test canvText-7.5 {DisplayText procedure: multi-line selection} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c select from test 2
     .c select to test 12
     update
-} {}
-test canvText-7.6 {DisplayText procedure: draw cursor} {
+}
+
+test canvText-7.6 {DisplayText procedure: draw cursor} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c icursor test 3
     update
-} {}
-test canvText-7.7 {DisplayText procedure: selected text different color} {
+}
+
+test canvText-7.7 {DisplayText procedure: selected text different color} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c config -selectforeground blue
     .c itemconfig test -anchor n
     update
-} {}
-test canvText-7.8 {DisplayText procedure: not selected} {
+}
+
+test canvText-7.8 {DisplayText procedure: not selected} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
+    focus .c
+    .c focus test
+    .c itemconfig test -text "abcd\nefghi\njklmnopq"
     .c select clear
     update
-} {}
-test canvText-7.9 {DisplayText procedure: select end} {
+}
+
+test canvText-7.9 {DisplayText procedure: select end} \
+-setup ::tkp_setup \
+-result {} \
+-body {
     catch {destroy .t}
     toplevel .t
     wm geometry .t +0+0
@@ -248,263 +402,455 @@ test canvText-7.9 {DisplayText procedure: select end} {
     update
     #catch {destroy .t}
     update
-} {}
+}
 
-test canvText-8.1 {TextInsert procedure: 0 length insert} {
+
+test canvText-8.1 {TextInsert procedure: 0 length insert} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
     .c insert test end {}
-} {}
-test canvText-8.2 {TextInsert procedure: before beginning/after end} {
+}
+
+test canvText-8.2 {TextInsert procedure: before beginning/after end} \
+-setup ::tkp_setup \
+-result {} \
+-body {
     # Can't test this because GetTextIndex filters out those numbers.
-} {}
-test canvText-8.3 {TextInsert procedure: inserting in a selected item} {
+}
+
+test canvText-8.3 {TextInsert procedure: inserting in a selected item} \
+-setup ::tkp_setup \
+-result {axyzbcdefg} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select from test 2
     .c select to test 4
     .c insert test 1 "xyz"
     .c itemcget test -text
-} {axyzbcdefg}
-test canvText-8.4 {TextInsert procedure: inserting before selection} {
+}
+
+test canvText-8.4 {TextInsert procedure: inserting before selection} \
+-setup ::tkp_setup \
+-result {5 7} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select from test 2
     .c select to test 4
     .c insert test 1 "xyz"
     list [.c index test sel.first] [.c index test sel.last]
-} {5 7}
-test canvText-8.5 {TextInsert procedure: inserting in selection} {
+}
+
+test canvText-8.5 {TextInsert procedure: inserting in selection} \
+-setup ::tkp_setup \
+-result {2 7} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select from test 2
     .c select to test 4
     .c insert test 3 "xyz"
     list [.c index test sel.first] [.c index test sel.last]
-} {2 7}
-test canvText-8.6 {TextInsert procedure: inserting after selection} {
+}
+
+test canvText-8.6 {TextInsert procedure: inserting after selection} \
+-setup ::tkp_setup \
+-result {2 4} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select from test 2
     .c select to test 4
     .c insert test 5 "xyz"
     list [.c index test sel.first] [.c index test sel.last]
-} {2 4}
-test canvText-8.7 {TextInsert procedure: inserting in unselected item} {
+}
+
+test canvText-8.7 {TextInsert procedure: inserting in unselected item} \
+-setup ::tkp_setup \
+-result {abcdexyzfg} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select clear
     .c insert test 5 "xyz"
     .c itemcget test -text
-} {abcdexyzfg}
-test canvText-8.8 {TextInsert procedure: inserting before cursor} {
+}
+
+test canvText-8.8 {TextInsert procedure: inserting before cursor} \
+-setup ::tkp_setup \
+-result {6} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c icursor test 3
     .c insert test 2 "xyz"
     .c index test insert
-} {6}
-test canvText-8.9 {TextInsert procedure: inserting after cursor} {
+}
+
+test canvText-8.9 {TextInsert procedure: inserting after cursor} \
+-setup ::tkp_setup \
+-result {3} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c icursor test 3
     .c insert test 4 "xyz"
     .c index test insert
-} {3}
+}
 
-test canvText-9.1 {TextInsert procedure: before beginning/after end} {
+
+test canvText-9.1 {TextInsert procedure: before beginning/after end} \
+-setup ::tkp_setup \
+-result {} \
+-body {
     # Can't test this because GetTextIndex filters out those numbers.
-} {}
-test canvText-9.2 {TextInsert procedure: start > end} {
+}
+
+test canvText-9.2 {TextInsert procedure: start > end} \
+-setup ::tkp_setup \
+-result {abcdefg} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c dchars test 4 2
     .c itemcget test -text
-} {abcdefg}
-test canvText-9.3 {TextInsert procedure: deleting from a selected item} {
+}
+
+test canvText-9.3 {TextInsert procedure: deleting from a selected item} \
+-setup ::tkp_setup \
+-result {abcg} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefg"
     .c select from test 2
     .c select to test 4
     .c dchars test 3 5
     .c itemcget test -text
-} {abcg}
-test canvText-9.4 {TextInsert procedure: deleting before start} {
+}
+
+test canvText-9.4 {TextInsert procedure: deleting before start} \
+-setup ::tkp_setup \
+-result {3 7} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 4
     .c select to test 8
     .c dchars test 1 1
     list [.c index test sel.first] [.c index test sel.last]
-} {3 7}
-test canvText-9.5 {TextInsert procedure: keep start > first char deleted} {
+}
+
+test canvText-9.5 {TextInsert procedure: keep start > first char deleted} \
+-setup ::tkp_setup \
+-result {2 3} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 4
     .c select to test 8
     .c dchars test 2 6
     list [.c index test sel.first] [.c index test sel.last]
-} {2 3}
-test canvText-9.6 {TextInsert procedure: deleting inside selection} {
+}
+
+test canvText-9.6 {TextInsert procedure: deleting inside selection} \
+-setup ::tkp_setup \
+-result {4 7} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 4
     .c select to test 8
     .c dchars test 6 6
     list [.c index test sel.first] [.c index test sel.last]
-} {4 7}
-test canvText-9.7 {TextInsert procedure: keep end > first char deleted} {
+}
+
+test canvText-9.7 {TextInsert procedure: keep end > first char deleted} \
+-setup ::tkp_setup \
+-result {4 5} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 4
     .c select to test 8
     .c dchars test 6 10
     list [.c index test sel.first] [.c index test sel.last]
-} {4 5}
-test canvText-9.8 {TextInsert procedure: selectFirst > selectLast: deselect} {
+}
+
+test canvText-9.8 {TextInsert procedure: selectFirst > selectLast: deselect} \
+-setup ::tkp_setup \
+-result {1 {selection isn't in item}} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 4
     .c select to test 8
     .c dchars test 3 10
     list [catch {.c index test sel.first} msg] $msg
-} {1 {selection isn't in item}}
-test canvText-9.9 {TextInsert procedure: selectFirst <= selectLast} {
+}
+
+test canvText-9.9 {TextInsert procedure: selectFirst <= selectLast} \
+-setup ::tkp_setup \
+-result {4 4} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 4
     .c select to test 8
     .c dchars test 4 7
     list [.c index test sel.first] [.c index test sel.last]
-} {4 4}
-test canvText-9.10 {TextInsert procedure: move anchor} {
+}
+
+test canvText-9.10 {TextInsert procedure: move anchor} \
+-setup ::tkp_setup \
+-result {1 2} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 6
     .c select to test 8
     .c dchars test 2 4
     .c select to test 1
     list [.c index test sel.first] [.c index test sel.last]
-} {1 2}
-test canvText-9.11 {TextInsert procedure: keep anchor >= first} {
+}
+
+test canvText-9.11 {TextInsert procedure: keep anchor >= first} \
+-setup ::tkp_setup \
+-result {1 4} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 6
     .c select to test 8
     .c dchars test 5 7
     .c select to test 1
     list [.c index test sel.first] [.c index test sel.last]
-} {1 4}
-test canvText-9.12 {TextInsert procedure: anchor doesn't move} {
+}
+
+test canvText-9.12 {TextInsert procedure: anchor doesn't move} \
+-setup ::tkp_setup \
+-result {2 8} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c select from test 2
     .c select to test 5
     .c dchars test 6 8
     .c select to test 8
     list [.c index test sel.first] [.c index test sel.last]
-} {2 8}
-test canvText-9.13 {TextInsert procedure: move cursor} {
+}
+
+test canvText-9.13 {TextInsert procedure: move cursor} \
+-setup ::tkp_setup \
+-result {3} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c icursor test 6
     .c dchars test 2 4
     .c index test insert
-} {3}
-test canvText-9.14 {TextInsert procedure: keep cursor >= first} {
+}
+
+test canvText-9.14 {TextInsert procedure: keep cursor >= first} \
+-setup ::tkp_setup \
+-result {2} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c icursor test 6
     .c dchars test 2 10
     .c index test insert
-} {2}
-test canvText-9.15 {TextInsert procedure: cursor doesn't move} {
+}
+
+test canvText-9.15 {TextInsert procedure: cursor doesn't move} \
+-setup ::tkp_setup \
+-result {5} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijk"
     .c icursor test 5
     .c dchars test 7 9
     .c index test insert
-} {5}
+}
 
-test canvText-10.1 {TextToPoint procedure} {
+
+test canvText-10.1 {TextToPoint procedure} \
+-setup ::tkp_setup \
+-result {0} \
+-body {
+    .c create text 20 20 -tag test
     .c coords test 0 0
     .c itemconfig test -text 0 -anchor center
     .c index test @0,0
-} {0}
+}
 
-test canvText-11.1 {TextToArea procedure} {
+
+test canvText-11.1 {TextToArea procedure} \
+-setup ::tkp_setup \
+-result 1 \
+-body {
+    .c create text 20 20 -tag test ;#=1
     .c coords test 0 0
     .c itemconfig test -text 0 -anchor center
     .c find overlapping 0 0 1 1
-} [.c find withtag test]
-test canvText-11.2 {TextToArea procedure} {
+}
+
+test canvText-11.2 {TextToArea procedure} \
+-setup ::tkp_setup \
+-result {} \
+-body {
+    .c create text 20 20 -tag test
     .c coords test 0 0
     .c itemconfig test -text 0 -anchor center
     .c find overlapping 1000 1000 1001 1001
-} {}
+}
 
-test canvText-12.1 {ScaleText procedure} {
+
+test canvText-12.1 {ScaleText procedure} \
+-setup ::tkp_setup \
+-result {150.0 150.0} \
+-body {
+    .c create text 20 20 -tag test
     .c coords test 100 100
-    .c scale all 50 50 2 2
+    # scale the root item, should scale children, too
+    .c scale 0 50 50 2 2
     .c coords test
-} {150.0 150.0}
+}
 
-test canvText-13.1 {TranslateText procedure} {
+
+test canvText-13.1 {TranslateText procedure} \
+-setup ::tkp_setup \
+-result {100.0 100.0 110.0 110.0 120.0 120.0} \
+-body {
+    .c create text 20 20 -tag test
     .c coords test 100 100
-    .c move all 10 10
-    .c coords test
-} {110.0 110.0}
+    set myRet [.c coords test]
+    .c move test 10 10
+    lappend myRet {*}[.c coords test]
+    # move the root item, should move children, too
+    .c move 0 10 10
+    lappend myRet {*}[.c coords test]
+}
 
-.c itemconfig test -text "abcdefghijklmno" -anchor nw
-.c select from test 5
-.c select to test 8
-.c icursor test 12
-.c coords test 0 0
-test canvText-14.1 {GetTextIndex procedure} {
+
+test canvText-14.1 {GetTextIndex procedure} \
+-setup ::tkp_setup \
+-result {15 12 5 8 0 0 10 15} \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfig test -text "abcdefghijklmno" -anchor nw
+    .c select from test 5
+    .c select to test 8
+    .c icursor test 12
+    .c coords test 0 0
     list [.c index test end] [.c index test insert] \
 	[.c index test sel.first] [.c index test sel.last] \
 	[.c index test @0,0] \
 	[.c index test -1] [.c index test 10] [.c index test 100]
-} {15 12 5 8 0 0 10 15}
-test canvText-14.2 {GetTextIndex procedure: select error} {
+}
+
+test canvText-14.2 {GetTextIndex procedure: select error} \
+-setup ::tkp_setup \
+-result {1 {selection isn't in item}} \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfig test -text "abcdefghijklmno" -anchor nw
+    .c select from test 5
+    .c select to test 8
+    .c icursor test 12
+    .c coords test 0 0
     .c select clear
     list [catch {.c index test sel.first} msg] $msg
-} {1 {selection isn't in item}}
-test canvText-14.3 {GetTextIndex procedure: select error} {
+}
+
+test canvText-14.3 {GetTextIndex procedure: select error} \
+-setup ::tkp_setup \
+-result {1 {selection isn't in item}} \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfig test -text "abcdefghijklmno" -anchor nw
+    .c select from test 5
+    .c select to test 8
+    .c icursor test 12
+    .c coords test 0 0
     .c select clear
     list [catch {.c index test sel.last} msg] $msg
-} {1 {selection isn't in item}}
-test canvText-14.4 {GetTextIndex procedure: select error} {
+}
+
+test canvText-14.4 {GetTextIndex procedure: select error} \
+-setup ::tkp_setup \
+-result {1 {bad index "sel."}} \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfig test -text "abcdefghijklmno" -anchor nw
+    .c select from test 5
+    .c select to test 8
+    .c icursor test 12
+    .c coords test 0 0
     .c select clear
     list [catch {.c index test sel.} msg] $msg
-} {1 {bad index "sel."}}
-test canvText-14.5 {GetTextIndex procedure: bad int or unknown index} {
-    list [catch {.c index test xyz} msg] $msg
-} {1 {bad index "xyz"}}
+}
 
-test canvText-15.1 {SetTextCursor procedure} {
-    .c itemconfig -text "abcdefg"
+test canvText-14.5 {GetTextIndex procedure: bad int or unknown index} \
+-setup ::tkp_setup \
+-result {1 {bad index "xyz"}} \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfig test -text "abcdefghijklmno" -anchor nw
+    .c select from test 5
+    .c select to test 8
+    .c icursor test 12
+    .c coords test 0 0
+    list [catch {.c index test xyz} msg] $msg
+}
+
+
+test canvText-15.1 {SetTextCursor procedure} \
+-setup ::tkp_setup \
+-result {3} \
+-body {
+    .c create text 20 20 -tag test
+    .c itemconfig test -text "abcdefg"
     .c icursor test 3
     .c index test insert
-} {3}
+}
 
-test canvText-16.1 {GetSelText procedure} {
+test canvText-16.1 {GetSelText procedure} \
+-setup ::tkp_setup \
+-result {fghi} \
+-body {
+    .c create text 20 20 -tag test
     .c itemconfig test -text "abcdefghijklmno" -anchor nw
     .c select from test 5
     .c select to test 8
     selection get
-} {fghi}
+}
 
 set font {Courier 12 italic}
 set ax [font measure $font 0]
 set ay [font metrics $font -linespace]
 
-test canvText-17.1 {TextToPostscript procedure} {
-    .c delete all
+
+test canvText-17.1 {TextToPostscript procedure} \
+-setup ::tkp_setup \
+-result 1 \
+-body {
     .c config -height 300 -highlightthickness 0 -bd 0
     update
     .c create text 100 100 -tags test
     .c itemconfig test -font $font -text "00000000" -width [expr 3*$ax]
     .c itemconfig test -anchor n -fill black
     set x [.c postscript]
-    set x [string range $x [string first "/Courier-Oblique" $x] end]
-} "/Courier-Oblique findfont [font actual $font -size] scalefont ISOEncode setfont
-0.000 0.000 0.000 setrgbcolor AdjustColor
-100 200 \[
-\[(000)\]
-\[(000)\]
-\[(00)\]
-] $ay -0.5 0 0 false DrawText
-grestore
-restore showpage
+    string match "*restore showpage\n\n%%Trailer\nend\n%%EOF\n" $x
+}
 
-%%Trailer
-end
-%%EOF
-"
 
-test canvText-18.1 {bug fix 2525, find enclosed on text with newlines} {
-    catch {destroy .c}
-    tkp::canvas .c
-    pack .c
-    .c delete all
+test canvText-18.1 {bug fix 2525, find enclosed on text with newlines} \
+-setup ::tkp_setup \
+-result 1 \
+-body {
     .c create text 100 100 -text Hello\n -anchor nw
     set bbox [.c bbox 1]
     set x2 [lindex $bbox 2]
@@ -512,13 +858,14 @@ test canvText-18.1 {bug fix 2525, find enclosed on text with newlines} {
     incr y2
     update
     .c find enclosed 99 99 [expr $x2 + $i] [expr $y2 + 1]
-} 1
+}
 
-test canvText-19.1 {patch 1006286, leading space caused wrap under Win32} {
-    catch {destroy .c}
-    set c [tkp::canvas .c -bg black -width 964]
-    pack $c
-    $c delete all
+
+test canvText-19.1 {patch 1006286, leading space caused wrap under Win32} \
+-setup ::tkp_setup \
+-result {{Yeah } Yeah- 4 4} \
+-body {
+    .c configure -bg black -width 964
     after 1000 "set done 1" ; vwait done
 
     set f {Arial 28 bold}
@@ -526,34 +873,34 @@ test canvText-19.1 {patch 1006286, leading space caused wrap under Win32} {
     set s1 {    Yeah-ah-ah-ah-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-oh-Yow}
     set s2 {    Yeah ah ah ah oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh Yow}
 
-    $c create text 21 18 \
+    .c create text 21 18 \
         -font $f \
         -text $s1 \
         -fill white \
         -width 922 \
         -anchor nw \
         -tags tbox1
-    eval {$c create rect} [$c bbox tbox1] -outline red
+    eval {.c create rect} [.c bbox tbox1] -outline red
 
-    $c create text 21 160 \
+    .c create text 21 160 \
         -font $f \
         -text $s2 \
         -fill white \
         -width 922 \
         -anchor nw \
         -tags tbox2
-    eval {$c create rect} [$c bbox tbox2] -outline red
+    eval {.c create rect} [.c bbox tbox2] -outline red
 
     after 1000 "set done 1" ; vwait done
 
     set results [list]
 
-    $c select from tbox2 4
-    $c select to tbox2 8
+    .c select from tbox2 4
+    .c select to tbox2 8
     lappend results [selection get]
 
-    $c select from tbox1 4
-    $c select to tbox1 8
+    .c select from tbox1 4
+    .c select to tbox1 8
     lappend results [selection get]
 
     array set metrics [font metrics $f]
@@ -562,13 +909,13 @@ test canvText-19.1 {patch 1006286, leading space caused wrap under Win32} {
     set y1 [expr {18 + ($metrics(-linespace) / 2)}]
     set y2 [expr {160 + ($metrics(-linespace) / 2)}]
 
-    lappend results [$c index tbox1 @$x,$y1]
-    lappend results [$c index tbox2 @$x,$y2]
+    lappend results [.c index tbox1 @$x,$y1]
+    lappend results [.c index tbox2 @$x,$y2]
 
     set results
-} {{Yeah } Yeah- 4 4}
+}
 
 
 # cleanup
-cleanupTests
+::tkp_cleanup
 return

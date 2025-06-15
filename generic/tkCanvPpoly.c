@@ -6,7 +6,6 @@
  *
  * Copyright (c) 2007-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include "tkIntPath.h"
@@ -14,9 +13,6 @@
 #include "tkCanvPathUtil.h"
 #include "tkCanvArrow.h"
 #include "tkPathStyle.h"
-
-/* For debugging. */
-extern Tcl_Interp *gInterp;
 
 /*
  * The structure below defines the record for each path item.
@@ -44,39 +40,45 @@ enum {
  */
 
 static void	ComputePpolyBbox(Tk_PathCanvas canvas, PpolyItem *ppolyPtr);
-static int	ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, 
+static int	ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, int objc,
-                        Tcl_Obj *CONST objv[], int flags);
-int		CoordsForPolygonline(Tcl_Interp *interp, Tk_PathCanvas canvas, int closed,
-                        int objc, Tcl_Obj *CONST objv[], PathAtom **atomPtrPtr, int *lenPtr);
+                        Tcl_Obj *const objv[], int flags);
+static int	CoordsForPolygonline(Tcl_Interp *interp, Tk_PathCanvas canvas,
+			int closed, Tcl_Size objc, Tcl_Obj *const objv[],
+			PathAtom **atomPtrPtr, int *lenPtr);
 static int	CreateAny(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[], char type);
+                        int objc, Tcl_Obj *const objv[], char type);
 static int	CreatePolyline(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[]);
+                        int objc, Tcl_Obj *const objv[]);
 static int	CreatePpolygon(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[]);
+                        int objc, Tcl_Obj *const objv[]);
 static void	DeletePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPpoly(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, Display *display, Drawable drawable,
                         int x, int y, int width, int height);
 static void	PpolyBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask);
 static int	PpolyCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[]);
+                        int objc, Tcl_Obj *const objv[]);
 static int	PpolyToArea(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *rectPtr);
+static int	PpolyToPdf(Tcl_Interp *interp,
+                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int objc, Tcl_Obj *const objv[], int prepass);
 static double	PpolyToPoint(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *coordPtr);
+#ifndef TKP_NO_POSTSCRIPT
 static int	PpolyToPostscript(Tcl_Interp *interp,
-                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
-static void	ScalePpoly(Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, double originX, double originY,
-                        double scaleX, double scaleY);
-static void	TranslatePpoly(Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, double deltaX, double deltaY);
-
+                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int prepass);
+#endif
+static void	ScalePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int compensate, double originX, double originY,
+			double scaleX, double scaleY);
+static void	TranslatePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int compensate, double deltaX, double deltaY);
 static int      ConfigureArrows(Tk_PathCanvas canvas, PpolyItem *ppolyPtr);
 
 PATH_STYLE_CUSTOM_OPTION_RECORDS
@@ -105,9 +107,6 @@ static Tk_OptionSpec optionSpecsPpolygon[] = {
     PATH_OPTION_SPEC_END
 };
 
-static Tk_OptionTable optionTablePolyline = NULL;
-static Tk_OptionTable optionTablePpolygon = NULL;
-
 /*
  * The structures below defines the 'polyline' item type by means
  * of procedures that can be invoked by generic item code.
@@ -126,7 +125,10 @@ Tk_PathItemType tkPolylineType = {
     PpolyBbox,				/* bboxProc */
     PpolyToPoint,			/* pointProc */
     PpolyToArea,			/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     PpolyToPostscript,			/* postscriptProc */
+#endif
+    PpolyToPdf,				/* pdfProc */
     ScalePpoly,				/* scaleProc */
     TranslatePpoly,			/* translateProc */
     (Tk_PathItemIndexProc *) NULL,	/* indexProc */
@@ -150,7 +152,10 @@ Tk_PathItemType tkPpolygonType = {
     PpolyBbox,				/* bboxProc */
     PpolyToPoint,			/* pointProc */
     PpolyToArea,			/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     PpolyToPostscript,			/* postscriptProc */
+#endif
+    PpolyToPdf,				/* pdfProc */
     ScalePpoly,				/* scaleProc */
     TranslatePpoly,			/* translateProc */
     (Tk_PathItemIndexProc *) NULL,	/* indexProc */
@@ -160,25 +165,24 @@ Tk_PathItemType tkPpolygonType = {
     (Tk_PathItemDCharsProc *) NULL,	/* dTextProc */
     (Tk_PathItemType *) NULL,		/* nextPtr */
 };
- 
 
-static int		
-CreatePolyline(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *CONST objv[])
+static int
+CreatePolyline(Tcl_Interp *interp, Tk_PathCanvas canvas,
+    struct Tk_PathItem *itemPtr, int objc, Tcl_Obj *const objv[])
 {
     return CreateAny(interp, canvas, itemPtr, objc, objv, kPpolyTypePolyline);
 }
 
-static int		
-CreatePpolygon(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *CONST objv[])
+static int
+CreatePpolygon(Tcl_Interp *interp, Tk_PathCanvas canvas,
+    struct Tk_PathItem *itemPtr, int objc, Tcl_Obj *const objv[])
 {
     return CreateAny(interp, canvas, itemPtr, objc, objv, kPpolyTypePolygon);
 }
 
-static int		
+static int
 CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *CONST objv[], char type)
+    int objc, Tcl_Obj *const objv[], char type)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ppolyPtr->headerEx;
@@ -207,18 +211,12 @@ CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
     TkPathArrowDescrInit(&ppolyPtr->endarrow);
 
     if (ppolyPtr->type == kPpolyTypePolyline) {
-	if (optionTablePolyline == NULL) {
-	    optionTablePolyline = Tk_CreateOptionTable(interp, optionSpecsPolyline);
-	}
-	optionTable = optionTablePolyline;
+	optionTable = Tk_CreateOptionTable(interp, optionSpecsPolyline);
     } else {
-	if (optionTablePpolygon == NULL) {
-	    optionTablePpolygon = Tk_CreateOptionTable(interp, optionSpecsPpolygon);
-	}
-	optionTable = optionTablePpolygon;    
+	optionTable = Tk_CreateOptionTable(interp, optionSpecsPpolygon);
     }
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) ppolyPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) ppolyPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -229,13 +227,13 @@ CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
             break;
         }
     }
-    if (CoordsForPolygonline(interp, canvas, 
-	    (ppolyPtr->type == kPpolyTypePolyline) ? 0 : 1, 
+    if (CoordsForPolygonline(interp, canvas,
+	    (ppolyPtr->type == kPpolyTypePolyline) ? 0 : 1,
 	    i, objv, &(ppolyPtr->atomPtr), &len) != TCL_OK) {
         goto error;
     }
     ppolyPtr->maxNumSegments = len;
-   
+
     if (ConfigurePpoly(interp, canvas, itemPtr, objc-i, objv+i, 0) == TCL_OK) {
         return TCL_OK;
     }
@@ -250,15 +248,15 @@ CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
     return TCL_ERROR;
 }
 
-static int		
-PpolyCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, 
-        int objc, Tcl_Obj *CONST objv[])
+static int
+PpolyCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    int objc, Tcl_Obj *const objv[])
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     int len, closed;
 
     closed = (ppolyPtr->type == kPpolyTypePolyline) ? 0 : 1;
-    if (CoordsForPolygonline(interp, canvas, closed, objc, objv, 
+    if (CoordsForPolygonline(interp, canvas, closed, objc, objv,
             &(ppolyPtr->atomPtr), &len) != TCL_OK) {
         return TCL_ERROR;
     }
@@ -266,7 +264,7 @@ PpolyCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
     ConfigureArrows(canvas, ppolyPtr);
     ComputePpolyBbox(canvas, ppolyPtr);
     return TCL_OK;
-}	
+}
 
 void
 ComputePpolyBbox(Tk_PathCanvas canvas, PpolyItem *ppolyPtr)
@@ -290,7 +288,8 @@ ComputePpolyBbox(Tk_PathCanvas canvas, PpolyItem *ppolyPtr)
     IncludeArrowPointsInRect(&itemPtr->bbox, &ppolyPtr->endarrow);
     itemPtr->totalBbox = GetGenericPathTotalBboxFromBare(ppolyPtr->atomPtr,
             &style, &itemPtr->bbox);
-    SetGenericPathHeaderBbox(&itemExPtr->header, style.matrixPtr, &itemPtr->totalBbox);
+    SetGenericPathHeaderBbox(&itemExPtr->header, style.matrixPtr,
+	    &itemPtr->totalBbox);
     TkPathCanvasFreeInheritedStyle(&style);
 }
 
@@ -312,29 +311,34 @@ ComputePpolyBbox(Tk_PathCanvas canvas, PpolyItem *ppolyPtr)
  *
  *--------------------------------------------------------------
  */
+
 typedef PathPoint *PathPointPtr;
+
 static int
-ConfigureArrows(
-        Tk_PathCanvas canvas, PpolyItem *ppolyPtr)
+ConfigureArrows(Tk_PathCanvas canvas, PpolyItem *ppolyPtr)
 {
     PathPoint *pfirstp;
     PathPoint psecond;
     PathPoint ppenult;
     PathPoint *plastp;
 
-    int error = getSegmentsFromPathAtomList(ppolyPtr->atomPtr, &pfirstp, &psecond, &ppenult, &plastp);
+    int error = GetSegmentsFromPathAtomList(ppolyPtr->atomPtr,
+			&pfirstp, &psecond, &ppenult, &plastp);
 
     if (error == TCL_OK) {
         PathPoint pfirst = *pfirstp;
         PathPoint plast = *plastp;
         Tk_PathStyle *lineStyle = &ppolyPtr->headerEx.style;
-        int isOpen = lineStyle->fill==NULL && ((pfirst.x != plast.x) || (pfirst.y != plast.y));
+        int isOpen = lineStyle->fill==NULL &&
+		((pfirst.x != plast.x) || (pfirst.y != plast.y));
 
         TkPathPreconfigureArrow(&pfirst, &ppolyPtr->startarrow);
         TkPathPreconfigureArrow(&plast, &ppolyPtr->endarrow);
 
-        *pfirstp = TkPathConfigureArrow(pfirst, psecond, &ppolyPtr->startarrow, lineStyle, isOpen);
-        *plastp = TkPathConfigureArrow(plast, ppenult, &ppolyPtr->endarrow, lineStyle, isOpen);
+        *pfirstp = TkPathConfigureArrow(pfirst, psecond,
+			&ppolyPtr->startarrow, lineStyle, isOpen);
+        *plastp = TkPathConfigureArrow(plast, ppenult, &ppolyPtr->endarrow,
+			lineStyle, isOpen);
     } else {
         TkPathFreeArrow(&ppolyPtr->startarrow);
         TkPathFreeArrow(&ppolyPtr->endarrow);
@@ -343,15 +347,14 @@ ConfigureArrows(
     return TCL_OK;
 }
 
-static int		
-ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, 
-        int objc, Tcl_Obj *CONST objv[], int flags)
+static int
+ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    int objc, Tcl_Obj *const objv[], int flags)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ppolyPtr->headerEx;
     Tk_PathStyle *stylePtr = &itemExPtr->style;
     Tk_Window tkwin;
-    //Tk_PathState state;
     Tk_SavedOptions savedOptions;
     Tcl_Obj *errorResult = NULL;
     int mask, error;
@@ -359,9 +362,7 @@ ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
     tkwin = Tk_PathCanvasTkwin(canvas);
     for (error = 0; error <= 1; error++) {
 	if (!error) {
-	    Tk_OptionTable optionTable;
-	    optionTable = (ppolyPtr->type == kPpolyTypePolyline) ? optionTablePolyline : optionTablePpolygon;
-	    if (Tk_SetOptions(interp, (char *) ppolyPtr, optionTable, 
+	    if (Tk_SetOptions(interp, (char *) ppolyPtr, itemPtr->optionTable,
 		    objc, objv, tkwin, &savedOptions, &mask) != TCL_OK) {
 		continue;
 	    }
@@ -369,7 +370,7 @@ ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 	    errorResult = Tcl_GetObjResult(interp);
 	    Tcl_IncrRefCount(errorResult);
 	    Tk_RestoreSavedOptions(&savedOptions);
-	}	
+	}
 	if (TkPathCanvasItemExConfigure(interp, canvas, itemExPtr, mask) != TCL_OK) {
 	    continue;
 	}
@@ -385,16 +386,6 @@ ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
     }
     stylePtr->strokeOpacity = MAX(0.0, MIN(1.0, stylePtr->strokeOpacity));
 
-#if 0	    // From old code. Needed?
-    state = itemPtr->state;
-    if(state == TK_PATHSTATE_NULL) {
-	state = TkPathCanvasState(canvas);
-    }
-    if (state == TK_PATHSTATE_HIDDEN) {
-        return TCL_OK;
-    }
-#endif
-
     ConfigureArrows(canvas, ppolyPtr);
 
     if (error) {
@@ -407,13 +398,12 @@ ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
     }
 }
 
-static void		
+static void
 DeletePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ppolyPtr->headerEx;
     Tk_PathStyle *stylePtr = &itemExPtr->style;
-    Tk_OptionTable optionTable;
 
     if (stylePtr->fill != NULL) {
 	TkPathFreePathColor(stylePtr->fill);
@@ -427,41 +417,39 @@ DeletePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display)
     }
     TkPathFreeArrow(&ppolyPtr->startarrow);
     TkPathFreeArrow(&ppolyPtr->endarrow);
-    optionTable = (ppolyPtr->type == kPpolyTypePolyline) ? optionTablePolyline : optionTablePpolygon;
-    Tk_FreeConfigOptions((char *) itemPtr, optionTable, Tk_PathCanvasTkwin(canvas));
+    Tk_FreeConfigOptions((char *) itemPtr, itemPtr->optionTable,
+			 Tk_PathCanvasTkwin(canvas));
 }
 
-static void		
-DisplayPpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display, Drawable drawable,
-        int x, int y, int width, int height)
+static void
+DisplayPpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display,
+    Drawable drawable, int x, int y, int width, int height)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     TMatrix m = GetCanvasTMatrix(canvas);
     Tk_PathStyle style;
-    
-    /* === EB - 23-apr-2010: register coordinate offsets */
-    TkPathSetCoordOffsets(m.tx, m.ty);
-    /* === */
-    
+
     style = TkPathCanvasInheritStyle(itemPtr, 0);
-    TkPathDrawPath(Tk_PathCanvasTkwin(canvas), drawable, ppolyPtr->atomPtr, &style,
-            &m, &itemPtr->bbox);
+    TkPathDrawPath(Tk_PathCanvasTkwin(canvas), drawable, ppolyPtr->atomPtr,
+	    &style, &m, &itemPtr->bbox);
     /*
      * Display arrowheads, if they are wanted.
      */
-    DisplayArrow(canvas, drawable, &ppolyPtr->startarrow, &style, &m, &itemPtr->bbox);
-    DisplayArrow(canvas, drawable, &ppolyPtr->endarrow, &style, &m, &itemPtr->bbox);
+    DisplayArrow(canvas, drawable, &ppolyPtr->startarrow, &style, &m,
+	    &itemPtr->bbox);
+    DisplayArrow(canvas, drawable, &ppolyPtr->endarrow, &style, &m,
+	    &itemPtr->bbox);
     TkPathCanvasFreeInheritedStyle(&style);
 }
 
-static void	
+static void
 PpolyBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     ComputePpolyBbox(canvas, ppolyPtr);
 }
 
-static double	
+static double
 PpolyToPoint(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *pointPtr)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
@@ -469,15 +457,16 @@ PpolyToPoint(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *pointPtr)
     double dist;
     long flags;
 
-    flags = (ppolyPtr->type == kPpolyTypePolyline) ? kPathMergeStyleNotFill : 0;
+    flags = (ppolyPtr->type == kPpolyTypePolyline) ?
+	    kPathMergeStyleNotFill : 0;
     style = TkPathCanvasInheritStyle(itemPtr, flags);
-    dist = GenericPathToPoint(canvas, itemPtr, &style, ppolyPtr->atomPtr, 
+    dist = GenericPathToPoint(canvas, itemPtr, &style, ppolyPtr->atomPtr,
             ppolyPtr->maxNumSegments, pointPtr);
     TkPathCanvasFreeInheritedStyle(&style);
     return dist;
 }
 
-static int		
+static int
 PpolyToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
@@ -485,46 +474,81 @@ PpolyToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
     int area;
     long flags;
 
-    flags = (ppolyPtr->type == kPpolyTypePolyline) ? kPathMergeStyleNotFill : 0;
-    style = TkPathCanvasInheritStyle(itemPtr, flags);    
-    area = GenericPathToArea(canvas, itemPtr, &style, 
+    flags = (ppolyPtr->type == kPpolyTypePolyline) ?
+	    kPathMergeStyleNotFill : 0;
+    style = TkPathCanvasInheritStyle(itemPtr, flags);
+    area = GenericPathToArea(canvas, itemPtr, &style,
             ppolyPtr->atomPtr, ppolyPtr->maxNumSegments, areaPtr);
-    TkPathCanvasFreeInheritedStyle(&style);            
+    TkPathCanvasFreeInheritedStyle(&style);
     return area;
 }
 
-static int		
-PpolyToPostscript(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass)
+static int
+PpolyToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    int objc, Tcl_Obj *const objv[], int prepass)
+{
+    Tk_PathStyle style;
+    PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
+    Tk_PathState state = itemPtr->state;
+    int result;
+
+    if (state == TK_PATHSTATE_NULL) {
+	state = TkPathCanvasState(canvas);
+    }
+    if ((ppolyPtr->atomPtr == NULL) || (state == TK_PATHSTATE_HIDDEN)) {
+	return TCL_OK;
+    }
+    style = TkPathCanvasInheritStyle(itemPtr, 0);
+    result = TkPathPdf(interp, ppolyPtr->atomPtr, &style, &itemPtr->bbox,
+		       objc, objv);
+    if (result == TCL_OK) {
+	result = TkPathPdfArrow(interp, &ppolyPtr->startarrow, &style);
+	if (result == TCL_OK) {
+	    result = TkPathPdfArrow(interp, &ppolyPtr->endarrow, &style);
+	}
+    }
+    TkPathCanvasFreeInheritedStyle(&style);
+    return result;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
+static int
+PpolyToPostscript(Tcl_Interp *interp, Tk_PathCanvas canvas,
+    Tk_PathItem *itemPtr, int prepass)
 {
     return TCL_ERROR;
 }
+#endif
 
-static void		
-ScalePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double originX, double originY,
-        double scaleX, double scaleY)
+static void
+ScalePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int compensate,
+    double originX, double originY, double scaleX, double scaleY)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
 
+    CompensateScale(itemPtr, compensate, &originX, &originY, &scaleX, &scaleY);
+
     ScalePathAtoms(ppolyPtr->atomPtr, originX, originY, scaleX, scaleY);
     ScalePathRect(&itemPtr->bbox, originX, originY, scaleX, scaleY);
-    ScalePathRect(&itemPtr->totalBbox, originX, originY, scaleX, scaleY);
     TkPathScaleArrow(&ppolyPtr->startarrow, originX, originY, scaleX, scaleY);
     TkPathScaleArrow(&ppolyPtr->endarrow, originX, originY, scaleX, scaleY);
     ConfigureArrows(canvas, ppolyPtr);
     ScaleItemHeader(itemPtr, originX, originY, scaleX, scaleY);
 }
 
-static void		
-TranslatePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double deltaX, double deltaY)
+static void
+TranslatePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int compensate,
+    double deltaX, double deltaY)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
 
+    CompensateTranslate(itemPtr, compensate, &deltaX, &deltaY);
+
     TranslatePathAtoms(ppolyPtr->atomPtr, deltaX, deltaY);
     TranslatePathRect(&itemPtr->bbox, deltaX, deltaY);
-    TranslatePathRect(&itemPtr->totalBbox, deltaX, deltaY);
     TkPathTranslateArrow(&ppolyPtr->startarrow, deltaX, deltaY);
     TkPathTranslateArrow(&ppolyPtr->endarrow, deltaX, deltaY);
-    TranslateItemHeader(itemPtr, deltaX, deltaY);    
+    TranslateItemHeader(itemPtr, deltaX, deltaY);
 }
 
 /*
@@ -544,13 +568,13 @@ TranslatePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double deltaX, double
  *--------------------------------------------------------------
  */
 
-int		
+int
 CoordsForPolygonline(
-    Tcl_Interp *interp, 
-    Tk_PathCanvas canvas, 
+    Tcl_Interp *interp,
+    Tk_PathCanvas canvas,
     int closed,				/* Polyline (0) or polygon (1) */
-    int objc, 
-    Tcl_Obj *CONST objv[],
+    Tcl_Size objc,
+    Tcl_Obj *const objv[],
     PathAtom **atomPtrPtr,
     int *lenPtr)
 {
@@ -558,10 +582,10 @@ CoordsForPolygonline(
 
     if (objc == 0) {
         Tcl_Obj *obj = Tcl_NewListObj(0, (Tcl_Obj **) NULL);
-        
+
         while (atomPtr != NULL) {
             switch (atomPtr->type) {
-                case PATH_ATOM_M: { 
+                case PATH_ATOM_M: {
                     MoveToAtom *move = (MoveToAtom *) atomPtr;
                     Tcl_ListObjAppendElement(interp, obj, Tcl_NewDoubleObj(move->x));
                     Tcl_ListObjAppendElement(interp, obj, Tcl_NewDoubleObj(move->y));
@@ -574,7 +598,7 @@ CoordsForPolygonline(
                     break;
                 }
                 case PATH_ATOM_Z: {
-                
+
                     break;
                 }
                 default: {
@@ -584,6 +608,7 @@ CoordsForPolygonline(
             atomPtr = atomPtr->nextPtr;
         }
         Tcl_SetObjResult(interp, obj);
+        *lenPtr = 0;
         return TCL_OK;
     }
     if (objc == 1) {
@@ -594,12 +619,12 @@ CoordsForPolygonline(
     }
     if (objc & 1) {
         char buf[64 + TCL_INTEGER_SPACE];
-        sprintf(buf, "wrong # coordinates: expected an even number, got %d", objc);
+        sprintf(buf, "wrong # coordinates: expected an even number, got %ld", objc);
         Tcl_SetResult(interp, buf, TCL_VOLATILE);
         return TCL_ERROR;
     } else if (objc < 4) {
         char buf[64 + TCL_INTEGER_SPACE];
-        sprintf(buf, "wrong # coordinates: expected at least 4, got %d", objc);
+        sprintf(buf, "wrong # coordinates: expected at least 4, got %ld", objc);
         Tcl_SetResult(interp, buf, TCL_VOLATILE);
         return TCL_ERROR;
     } else {
@@ -607,7 +632,7 @@ CoordsForPolygonline(
         double	x, y;
         double	firstX = 0.0, firstY = 0.0;
         PathAtom *firstAtomPtr = NULL;
-    
+
         /*
         * Free any old stuff.
         */
@@ -641,6 +666,11 @@ CoordsForPolygonline(
     }
     return TCL_OK;
 }
-
-/*----------------------------------------------------------------------*/
-
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

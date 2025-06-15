@@ -9,7 +9,6 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #include "tkInt.h"
@@ -32,14 +31,18 @@ typedef struct SmoothAssocData {
 Tk_PathSmoothMethod tkPathBezierSmoothMethod = {
     "true",
     TkPathMakeBezierCurve,
+#ifndef TKP_NO_POSTSCRIPT
     (void (*) (Tcl_Interp *interp, Tk_PathCanvas canvas, double *coordPtr,
 	    int numPoints, int numSteps)) TkPathMakeBezierPostscript,
+#endif
 };
 static Tk_PathSmoothMethod tkPathRawSmoothMethod = {
     "raw",
     TkPathMakeRawCurve,
+#ifndef TKP_NO_POSTSCRIPT
     (void (*) (Tcl_Interp *interp, Tk_PathCanvas canvas, double *coordPtr,
 	    int numPoints, int numSteps)) TkPathMakeRawCurvePostscript,
+#endif
 };
 
 /*
@@ -51,7 +54,7 @@ static void		    SmoothMethodCleanupProc(ClientData clientData,
 static SmoothAssocData *    InitSmoothMethods(Tcl_Interp *interp);
 static int		    FindSmoothMethod(Tcl_Interp *interp, Tcl_Obj *valueObj,
 				Tk_PathSmoothMethod **smoothPtr);
-static int		    DashConvert(char *l, CONST char *p, int n,
+static int		    DashConvert(char *l, const char *p, int n,
 				double width);
 static void		    TranslateAndAppendCoords(TkPathCanvas *canvPtr,
 				double x, double y, XPoint *outArr, int numOut);
@@ -233,7 +236,7 @@ int
 Tk_PathCanvasGetCoord(
     Tcl_Interp *interp,		/* Interpreter for error reporting. */
     Tk_PathCanvas canvas,		/* Canvas to which coordinate applies. */
-    CONST char *string,		/* Describes coordinate (any screen coordinate
+    const char *string,		/* Describes coordinate (any screen coordinate
 				 * form may be used here). */
     double *doublePtr)		/* Place to store converted coordinate. */
 {
@@ -270,19 +273,36 @@ Tk_PathCanvasGetCoord(
 int
 Tk_PathCanvasGetCoordFromObj(
     Tcl_Interp *interp,		/* Interpreter for error reporting. */
-    Tk_PathCanvas canvas,		/* Canvas to which coordinate applies. */
+    Tk_PathCanvas canvas,	/* Canvas to which coordinate applies. */
     Tcl_Obj *obj,		/* Describes coordinate (any screen coordinate
 				 * form may be used here). */
     double *doublePtr)		/* Place to store converted coordinate. */
 {
     TkPathCanvas *canvasPtr = (TkPathCanvas *) canvas;
 
+#ifndef USE_TK_STUBS
+    return Tk_GetDoublePixelsFromObj(canvasPtr->interp,
+		canvasPtr->tkwin, obj, doublePtr);
+#else
+    int pixels;
+
     if (Tk_GetMMFromObj(canvasPtr->interp, canvasPtr->tkwin, obj,
 	    doublePtr) != TCL_OK) {
 	return TCL_ERROR;
     }
     *doublePtr *= canvasPtr->pixelsPerMM;
+
+    /*
+     * Unfortunately, Tcl_GetDoublePixelsFromObj() is not a public
+     * interface, so we try here to overcome rounding errors.
+     */
+    pixels = *doublePtr;
+    Tk_GetPixelsFromObj(canvasPtr->interp, canvasPtr->tkwin, obj, &pixels);
+    if (fabs(*doublePtr - pixels) < 1e-9) {
+	*doublePtr = pixels;
+    }
     return TCL_OK;
+#endif
 }
 
 /*
@@ -400,7 +420,7 @@ TkPathCanvasInheritStyle(Tk_PathItem *itemPtr, long flags)
     Tk_PathItemEx **parents;
     Tk_PathStyle style;
     TMatrix matrix = kPathUnitTMatrix;
-    
+
     depth = TkPathCanvasGetDepth(itemPtr);
     parents = (Tk_PathItemEx **) ckalloc(depth*sizeof(Tk_PathItemEx *));
 
@@ -409,17 +429,17 @@ TkPathCanvasInheritStyle(Tk_PathItem *itemPtr, long flags)
 	parents[i] = (Tk_PathItemEx *) walkPtr->parentPtr;
 	walkPtr = walkPtr->parentPtr, i++;
     }
-    
+
     /*
      * Cascade the style from the root item to the closest parent.
      * Start by just making a copy of the root's style.
      */
     itemExPtr = parents[depth-1];
     style = itemExPtr->style;
-    
+
     for (i = depth-1; i >= 0; i--) {
 	itemExPtr = parents[i];
-	
+
 	/* The order of these two merges decides which take precedence. */
 	if (i < depth-1) {
 	    TkPathStyleMergeStyles(&itemExPtr->style, &style, flags);
@@ -436,7 +456,7 @@ TkPathCanvasInheritStyle(Tk_PathItem *itemPtr, long flags)
 	 */
 	style.matrixPtr = NULL;
     }
-    
+
     /*
      * Merge the parents style with the actual items style.
      * The order of these two merges decides which take precedence.
@@ -445,7 +465,7 @@ TkPathCanvasInheritStyle(Tk_PathItem *itemPtr, long flags)
     TkPathStyleMergeStyles(&itemExPtr->style, &style, flags);
     if (itemExPtr->styleInst != NULL) {
 	TkPathStyleMergeStyles(itemExPtr->styleInst->masterPtr, &style, flags);
-    }    
+    }
     if (style.matrixPtr != NULL) {
 	anyMatrix = 1;
 	MMulTMatrix(style.matrixPtr, &matrix);
@@ -506,7 +526,7 @@ TkPathCanvasInheritTMatrix(Tk_PathItem *itemPtr)
 
     for (i = depth-1; i >= 0; i--) {
 	itemExPtr = parents[i];
-	
+
 	/* The order of these two merges decides which take precedence. */
 	matrixPtr = itemExPtr->style.matrixPtr;
 	if (itemExPtr->styleInst != NULL) {
@@ -517,7 +537,7 @@ TkPathCanvasInheritTMatrix(Tk_PathItem *itemPtr)
 	}
 	if (matrixPtr != NULL) {
 	    MMulTMatrix(matrixPtr, &matrix);
-	}	
+	}
     }
     ckfree((char *) parents);
     return matrix;
@@ -525,7 +545,7 @@ TkPathCanvasInheritTMatrix(Tk_PathItem *itemPtr)
 
 /* TkPathCanvasGradientTable etc.: this is just accessor functions to hide
    the internals of the TkPathCanvas */
-   
+
 Tcl_HashTable *
 TkPathCanvasGradientTable(Tk_PathCanvas canvas)
 {
@@ -550,11 +570,13 @@ TkPathCanvasCurrentItem(Tk_PathCanvas canvas)
     return ((TkPathCanvas *)canvas)->currentItemPtr;
 }
 
+#ifdef NOWHERE_USED
 Tk_PathItem *
 TkPathCanvasParentItem(Tk_PathItem *itemPtr)
 {
     return itemPtr->parentPtr;
 }
+#endif
 
 /*
  *----------------------------------------------------------------------
@@ -603,13 +625,14 @@ Tk_PathCanvasGetTextInfo(
 
 Tk_PathTags *
 TkPathAllocTagsFromObj(
-	Tcl_Interp *interp, 
+	Tcl_Interp *interp,
 	Tcl_Obj *valuePtr)	/* If NULL we just create an empty Tk_PathTags struct. */
 {
     Tk_PathTags *tagsPtr;
-    int objc, i, len;
+    Tcl_Size objc;
+    int i, len;
     Tcl_Obj **objv;
-    
+
     if (ObjectIsEmpty(valuePtr)) {
 	objc = 0;
     } else if (Tcl_ListObjGetElements(interp, valuePtr, &objc, &objv) != TCL_OK) {
@@ -631,7 +654,7 @@ TkPathFreeTags(Tk_PathTags *tagsPtr)
 {
     if (tagsPtr->tagPtr != NULL) {
 	ckfree((char *) tagsPtr->tagPtr);
-    }    
+    }
 }
 
 /*
@@ -660,7 +683,7 @@ int Tk_PathCanvasTagsOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	    /* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -670,7 +693,7 @@ int Tk_PathCanvasTagsOptionSetProc(
                              * be stored, or NULL. */
     Tcl_Obj *valuePtr;
     Tk_PathTags *newPtr = NULL;
-    
+
     valuePtr = *value;
     if (internalOffset >= 0) {
         internalPtr = recordPtr + internalOffset;
@@ -699,18 +722,18 @@ Tk_PathCanvasTagsOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)		/* Offset within *recordPtr containing the
 				 * value. */
 {
     Tk_PathTags	*tagsPtr;
     Tcl_Obj 	*listObj;
     int		i;
-    
+
     tagsPtr = *((Tk_PathTags **) (recordPtr + internalOffset));
     listObj = Tcl_NewListObj( 0, (Tcl_Obj **) NULL );
     if (tagsPtr != NULL) {
 	for (i = 0; i < tagsPtr->numTags; i++) {
-	    Tcl_ListObjAppendElement(NULL, listObj, 
+	    Tcl_ListObjAppendElement(NULL, listObj,
 				     Tcl_NewStringObj((char *) tagsPtr->tagPtr[i], -1));
 	}
     }
@@ -734,7 +757,7 @@ Tk_PathCanvasTagsOptionFreeProc(
     char *internalPtr)		/* Pointer to storage for value. */
 {
     Tk_PathTags	*tagsPtr;
-    
+
     tagsPtr = *((Tk_PathTags **) internalPtr);
     if (tagsPtr != NULL) {
 	TkPathFreeTags(tagsPtr);
@@ -742,7 +765,8 @@ Tk_PathCanvasTagsOptionFreeProc(
         *((char **) internalPtr) = NULL;
     }
 }
-
+
+#ifdef USE_OLD_CODE
 /*
  *--------------------------------------------------------------
  *
@@ -766,13 +790,13 @@ Tk_PathCanvasTagsParseProc(
     ClientData clientData,	/* Not used.*/
     Tcl_Interp *interp,		/* Used for reporting errors. */
     Tk_Window tkwin,		/* Window containing canvas widget. */
-    CONST char *value,		/* Value of option (list of tag names). */
+    const char *value,		/* Value of option (list of tag names). */
     char *widgRec,		/* Pointer to record for item. */
     int offset)			/* Offset into item (ignored). */
 {
-    register Tk_PathItem *itemPtr = (Tk_PathItem *) widgRec;
+    Tk_PathItem *itemPtr = (Tk_PathItem *) widgRec;
     int argc, i;
-    CONST char **argv;
+    const char **argv;
     Tk_Uid *newPtr;
 
     /*
@@ -805,7 +829,9 @@ Tk_PathCanvasTagsParseProc(
     ckfree((char *) argv);
     return TCL_OK;
 }
+#endif
 
+#ifdef USE_OLD_CODE
 /*
  *--------------------------------------------------------------
  *
@@ -838,7 +864,7 @@ Tk_PathCanvasTagsPrintProc(
 				 * information about how to reclaim storage
 				 * for return string. */
 {
-    register Tk_PathItem *itemPtr = (Tk_PathItem *) widgRec;
+    Tk_PathItem *itemPtr = (Tk_PathItem *) widgRec;
 
     if (itemPtr->numTags == 0) {
 	*freeProcPtr = NULL;
@@ -849,8 +875,9 @@ Tk_PathCanvasTagsPrintProc(
 	return (char *) itemPtr->tagPtr[0];
     }
     *freeProcPtr = TCL_DYNAMIC;
-    return Tcl_Merge(itemPtr->numTags, (CONST char **) itemPtr->tagPtr);
+    return Tcl_Merge(itemPtr->numTags, (const char **) itemPtr->tagPtr);
 }
+#endif
 
 /* Return NULL on error and leave error message */
 
@@ -858,7 +885,7 @@ static Tk_Dash *
 TkDashNew(Tcl_Interp *interp, Tcl_Obj *dashObj)
 {
     Tk_Dash *dashPtr;
-    
+
     dashPtr = (Tk_Dash *) ckalloc(sizeof(Tk_Dash));
     /*
      * NB: Tk_GetDash tries to free any existing pattern unless we zero this.
@@ -868,7 +895,7 @@ TkDashNew(Tcl_Interp *interp, Tcl_Obj *dashObj)
 	goto error;
     }
     return dashPtr;
-    
+
 error:
     TkDashFree(dashPtr);
     return NULL;
@@ -888,11 +915,11 @@ TkDashFree(Tk_Dash *dashPtr)
 /*
  *--------------------------------------------------------------
  *
- * Tk_DashOptionSetProc, Tk_DashOptionGetProc, 
+ * Tk_DashOptionSetProc, Tk_DashOptionGetProc,
  *	Tk_DashOptionRestoreProc, Tk_DashOptionRestoreProc --
  *
- *	These functions are invoked during option processing to handle 
- *	"-dash", "-activedash" and "-disableddash" 
+ *	These functions are invoked during option processing to handle
+ *	"-dash", "-activedash" and "-disableddash"
  *	options for canvas objects.
  *
  * Results:
@@ -904,7 +931,8 @@ TkDashFree(Tk_Dash *dashPtr)
  *--------------------------------------------------------------
  */
 
-int Tk_DashOptionSetProc(
+int
+Tk_DashOptionSetProc(
     ClientData clientData,
     Tcl_Interp *interp,	    /* Current interp; may be used for errors. */
     Tk_Window tkwin,	    /* Window for which option is being set. */
@@ -912,7 +940,7 @@ int Tk_DashOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	    /* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -922,7 +950,7 @@ int Tk_DashOptionSetProc(
                              * be stored, or NULL. */
     Tcl_Obj *valuePtr;
     Tk_Dash *newPtr = NULL;
-    
+
     valuePtr = *value;
     if (internalOffset >= 0) {
         internalPtr = recordPtr + internalOffset;
@@ -951,7 +979,7 @@ Tk_DashOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)		/* Offset within *recordPtr containing the
 				 * value. */
 {
     Tk_Dash *dashPtr;
@@ -961,8 +989,8 @@ Tk_DashOptionGetProc(
     int i;
 
     dashPtr = *((Tk_Dash **) (recordPtr + internalOffset));
-    
-    if (dashPtr != NULL) {	
+
+    if (dashPtr != NULL) {
 	i = dashPtr->number;
 	if (i < 0) {
 	    i = -i;
@@ -977,7 +1005,7 @@ Tk_DashOptionGetProc(
 	    buffer = (char *)ckalloc((unsigned int) (4*i));
 	    p = (i > (int)sizeof(char *)) ? dashPtr->pattern.pt : dashPtr->pattern.array;
 	    sprintf(buffer, "%d", *p++ & 0xff);
-	    while(--i) {
+	    while (--i) {
 		sprintf(buffer+strlen(buffer), " %d", *p++ & 0xff);
 	    }
 	}
@@ -1038,14 +1066,17 @@ InitSmoothMethods(
     methods = (SmoothAssocData *) ckalloc(sizeof(SmoothAssocData));
     methods->smooth.name = tkPathRawSmoothMethod.name;
     methods->smooth.coordProc = tkPathRawSmoothMethod.coordProc;
+#ifndef TKP_NO_POSTSCRIPT
     methods->smooth.postscriptProc = tkPathRawSmoothMethod.postscriptProc;
-
+#endif
     methods->nextPtr = (SmoothAssocData *) ckalloc(sizeof(SmoothAssocData));
 
     ptr = methods->nextPtr;
     ptr->smooth.name = tkPathBezierSmoothMethod.name;
     ptr->smooth.coordProc = tkPathBezierSmoothMethod.coordProc;
+#ifndef TKP_NO_POSTSCRIPT
     ptr->smooth.postscriptProc = tkPathBezierSmoothMethod.postscriptProc;
+#endif
     ptr->nextPtr = NULL;
 
     Tcl_SetAssocData(interp, "smoothPathMethod", SmoothMethodCleanupProc,
@@ -1107,7 +1138,9 @@ Tk_PathCreateSmoothMethod(
     ptr = (SmoothAssocData *) ckalloc(sizeof(SmoothAssocData));
     ptr->smooth.name = smooth->name;
     ptr->smooth.coordProc = smooth->coordProc;
+#ifndef TKP_NO_POSTSCRIPT
     ptr->smooth.postscriptProc = smooth->postscriptProc;
+#endif
     ptr->nextPtr = methods;
     Tcl_SetAssocData(interp, "smoothPathMethod", SmoothMethodCleanupProc,
 	    (ClientData) ptr);
@@ -1145,7 +1178,7 @@ SmoothMethodCleanupProc(
 }
 
 static int
-FindSmoothMethod(Tcl_Interp *interp, 
+FindSmoothMethod(Tcl_Interp *interp,
     Tcl_Obj *valueObj,
     Tk_PathSmoothMethod **smoothPtr)	/* Place to store converted result. */
 {
@@ -1225,7 +1258,7 @@ FindSmoothMethod(Tcl_Interp *interp,
  *--------------------------------------------------------------
  */
 
-int 
+int
 TkPathSmoothOptionSetProc(
     ClientData clientData,
     Tcl_Interp *interp,	    /* Current interp; may be used for errors. */
@@ -1234,7 +1267,7 @@ TkPathSmoothOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	    /* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -1244,7 +1277,7 @@ TkPathSmoothOptionSetProc(
                              * be stored, or NULL. */
     Tcl_Obj *valuePtr;
     Tk_PathSmoothMethod *newPtr = NULL;
-    
+
     valuePtr = *value;
     if (internalOffset >= 0) {
         internalPtr = recordPtr + internalOffset;
@@ -1272,11 +1305,11 @@ TkPathSmoothOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)		/* Offset within *recordPtr containing the
 				 * value. */
 {
     Tk_PathSmoothMethod *smooth;
-    
+
     smooth = *((Tk_PathSmoothMethod **) (recordPtr + internalOffset));
     return (smooth) ? Tcl_NewStringObj(smooth->name, -1) : Tcl_NewBooleanObj(0);
 }
@@ -1312,7 +1345,7 @@ void
 Tk_PathCreateOutline(
     Tk_PathOutline *outline)	/* Outline structure to be filled in. */
 {
-    outline->gc = None;
+    outline->gc = NULL;
     outline->width = 1.0;
     outline->activeWidth = 0.0;
     outline->disabledWidth = 0.0;
@@ -1324,9 +1357,9 @@ Tk_PathCreateOutline(
     outline->color = NULL;
     outline->activeColor = NULL;
     outline->disabledColor = NULL;
-    outline->stipple = None;
-    outline->activeStipple = None;
-    outline->disabledStipple = None;
+    outline->stipple = (Tcl_Size) NULL;
+    outline->activeStipple = (Tcl_Size) NULL;
+    outline->disabledStipple = (Tcl_Size) NULL;
 }
 
 /*
@@ -1353,9 +1386,9 @@ Tk_PathDeleteOutline(
     Display *display,		/* Display containing window. */
     Tk_PathOutline *outline)
 {
-    if (outline->gc != None) {
+    if (outline->gc != NULL) {
 	Tk_FreeGC(display, outline->gc);
-        outline->gc = None;
+        outline->gc = NULL;
     }
     if (outline->color != NULL) {
 	Tk_FreeColor(outline->color);
@@ -1369,17 +1402,17 @@ Tk_PathDeleteOutline(
 	Tk_FreeColor(outline->disabledColor);
         outline->disabledColor = NULL;
     }
-    if (outline->stipple != None) {
+    if (outline->stipple != (Tcl_Size) NULL) {
 	Tk_FreeBitmap(display, outline->stipple);
-        outline->stipple = None;
+        outline->stipple = (Tcl_Size) NULL;
     }
-    if (outline->activeStipple != None) {
+    if (outline->activeStipple != (Tcl_Size) NULL) {
 	Tk_FreeBitmap(display, outline->activeStipple);
-        outline->activeStipple = None;
+        outline->activeStipple = (Tcl_Size) NULL;
     }
-    if (outline->disabledStipple != None) {
+    if (outline->disabledStipple != (Tcl_Size) NULL) {
 	Tk_FreeBitmap(display, outline->disabledStipple);
-        outline->disabledStipple = None;
+        outline->disabledStipple = (Tcl_Size) NULL;
     }
 }
 
@@ -1426,7 +1459,7 @@ Tk_PathConfigOutlineGC(
     if (outline->disabledWidth < 0) {
 	outline->disabledWidth = 0.0;
     }
-    if (state==TK_PATHSTATE_HIDDEN) {
+    if (state == TK_PATHSTATE_HIDDEN) {
 	return 0;
     }
 
@@ -1450,7 +1483,7 @@ Tk_PathConfigOutlineGC(
 	if (outline->activeColor!=NULL) {
 	    color = outline->activeColor;
 	}
-	if (outline->activeStipple!=None) {
+	if (outline->activeStipple!=(Tcl_Size) NULL) {
 	    stipple = outline->activeStipple;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
@@ -1463,7 +1496,7 @@ Tk_PathConfigOutlineGC(
 	if (outline->disabledColor!=NULL) {
 	    color = outline->disabledColor;
 	}
-	if (outline->disabledStipple!=None) {
+	if (outline->disabledStipple!=(Tcl_Size) NULL) {
 	    stipple = outline->disabledStipple;
 	}
     }
@@ -1476,7 +1509,7 @@ Tk_PathConfigOutlineGC(
     if (color != NULL) {
 	gcValues->foreground = color->pixel;
 	mask = GCForeground|GCLineWidth;
-	if (stipple != None) {
+	if (stipple != (Tcl_Size) NULL) {
 	    gcValues->stipple = stipple;
 	    gcValues->fill_style = FillStippled;
 	    mask |= GCStipple|GCFillStyle;
@@ -1521,7 +1554,7 @@ Tk_PathChangeOutlineGC(
     Tk_PathItem *item,
     Tk_PathOutline *outline)
 {
-    CONST char *p;
+    const char *p;
     double width;
     Tk_Dash *dashPtr;
     XColor *color;
@@ -1548,7 +1581,7 @@ Tk_PathChangeOutlineGC(
 	if (outline->activeColor != NULL) {
 	    color = outline->activeColor;
 	}
-	if (outline->activeStipple != None) {
+	if (outline->activeStipple != (Tcl_Size) NULL) {
 	    stipple = outline->activeStipple;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
@@ -1561,7 +1594,7 @@ Tk_PathChangeOutlineGC(
 	if (outline->disabledColor != NULL) {
 	    color = outline->disabledColor;
 	}
-	if (outline->disabledStipple != None) {
+	if (outline->disabledStipple != (Tcl_Size) NULL) {
 	    stipple = outline->disabledStipple;
 	}
     }
@@ -1588,7 +1621,7 @@ Tk_PathChangeOutlineGC(
 		    outline->offset, p, dashPtr->number);
 	}
     }
-    if (stipple != None) {
+    if (stipple != (Tcl_Size) NULL) {
 	int w=0; int h=0;
 	Tk_TSOffset *tsoffset = outline->tsoffsetPtr;
 	int flags = tsoffset->flags;
@@ -1668,7 +1701,7 @@ Tk_PathResetOutlineGC(
 	if (outline->activeColor != NULL) {
 	    color = outline->activeColor;
 	}
-	if (outline->activeStipple != None) {
+	if (outline->activeStipple != (Tcl_Size) NULL) {
 	    stipple = outline->activeStipple;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
@@ -1681,7 +1714,7 @@ Tk_PathResetOutlineGC(
 	if (outline->disabledColor != NULL) {
 	    color = outline->disabledColor;
 	}
-	if (outline->disabledStipple != None) {
+	if (outline->disabledStipple != (Tcl_Size) NULL) {
 	    stipple = outline->disabledStipple;
 	}
     }
@@ -1704,13 +1737,14 @@ Tk_PathResetOutlineGC(
 		    outline->offset, &dashList , 1);
 	}
     }
-    if (stipple != None) {
+    if (stipple != (Tcl_Size) NULL) {
 	XSetTSOrigin(((TkPathCanvas *)canvas)->display, outline->gc, 0, 0);
 	return 1;
     }
     return 0;
 }
 
+#ifndef TKP_NO_POSTSCRIPT
 /*
  *--------------------------------------------------------------
  *
@@ -1766,7 +1800,7 @@ Tk_PathCanvasPsOutline(
 	if (outline->activeColor != NULL) {
 	    color = outline->activeColor;
 	}
-	if (outline->activeStipple != None) {
+	if (outline->activeStipple != (Tcl_Size) NULL) {
 	    stipple = outline->activeStipple;
 	}
     } else if (state == TK_PATHSTATE_DISABLED) {
@@ -1779,7 +1813,7 @@ Tk_PathCanvasPsOutline(
 	if (outline->disabledColor != NULL) {
 	    color = outline->disabledColor;
 	}
-	if (outline->disabledStipple != None) {
+	if (outline->disabledStipple != (Tcl_Size) NULL) {
 	    stipple = outline->disabledStipple;
 	}
     }
@@ -1839,7 +1873,7 @@ Tk_PathCanvasPsOutline(
     if (Tk_PathCanvasPsColor(interp, canvas, color) != TCL_OK) {
 	return TCL_ERROR;
     }
-    if (stipple != None) {
+    if (stipple != (Tcl_Size) NULL) {
 	Tcl_AppendResult(interp, "StrokeClip ", NULL);
 	if (Tk_PathCanvasPsStipple(interp, canvas, stipple) != TCL_OK) {
 	    return TCL_ERROR;
@@ -1850,6 +1884,7 @@ Tk_PathCanvasPsOutline(
 
     return TCL_OK;
 }
+#endif
 
 /*
  *--------------------------------------------------------------
@@ -1873,7 +1908,7 @@ static int
 DashConvert(
     char *l,			/* Must be at least 2*n chars long, or NULL to
 				 * indicate "just check syntax". */
-    CONST char *p,		/* String to parse. */
+    const char *p,		/* String to parse. */
     int n,			/* Length of string to parse, or -1 to
 				 * indicate that strlen() should be used. */
     double width)		/* Width of line. */
@@ -2227,7 +2262,6 @@ TkPathCanvTranslatePath(
     return numOutput;
 }
 
-
 /*
  * Local Variables:
  * mode: c
