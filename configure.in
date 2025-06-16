@@ -3,7 +3,6 @@ dnl	This file is an input file used by the GNU "autoconf" program to
 dnl	generate the file "configure", which is run during Tcl installation
 dnl	to configure the system for the local environment.
 #
-# RCS: @(#) $Id$
 
 #-----------------------------------------------------------------------
 # Sample configure.in for Tcl Extensions.  The only places you should
@@ -18,7 +17,7 @@ dnl	to configure the system for the local environment.
 # so you can encode the package version directly into the source files.
 #-----------------------------------------------------------------------
 
-AC_INIT([tkpath], [0.3.3])
+AC_INIT([tkpath], [0.3.3.1])
 
 #--------------------------------------------------------------------
 # Call TEA_INIT as the first TEA_ macro to set up initial vars.
@@ -144,14 +143,12 @@ TEA_ADD_SOURCES([path.c \
 TEA_ADD_HEADERS([])
 TEA_ADD_INCLUDES([-I. -I\"`${CYGPATH} ${srcdir}/generic`\"])
 TEA_ADD_LIBS([])
+TEA_ADD_CFLAGS([])
 TEA_ADD_STUB_SOURCES([])
 TEA_ADD_TCL_SOURCES([library/tkpath.tcl])
 
 #--------------------------------------------------------------------
 # A few miscellaneous platform-specific items:
-#
-# Define a special symbol for Windows (BUILD_sample in this case) so
-# that we create the export library with the dll.
 #
 # Windows creates a few extra files that need to be cleaned up.
 # You can add more files to clean if your extension creates any extra
@@ -160,14 +157,20 @@ TEA_ADD_TCL_SOURCES([library/tkpath.tcl])
 # TEA_ADD_* any platform specific compiler/build info here.
 #--------------------------------------------------------------------
 
-if test "${TEA_PLATFORM}" = "windows" ; then
-    AC_PROG_CXX
-    CC=$CXX
+case ${TK_DEFS} in
+    *PLATFORM_SDL*)
+	USE_SDL=yes
+	;;
+esac
 
-    AC_DEFINE(BUILD_tkpath, 1, [Build windows export dll])
+if test "${TEA_PLATFORM}" = "windows" -a "${USE_SDL}" != "yes" ; then
+    AC_PROG_CXX
+    CC=${CXX}
+
     CLEANFILES="pkgIndex.tcl *.lib *.dll *.exp *.ilk *.pdb vc*.pch"
     TEA_ADD_SOURCES([win/tkWinGDIPlusPath.cpp])
     TEA_ADD_LIBS([gdiplus.lib gdi32.lib])
+    SHLIB_LD="$SHLIB_LD -lgdiplus -lgdi32"
     #TEA_ADD_INCLUDES([-I\"$(${CYGPATH} ${srcdir}/win)\"])
 
     ## Check if the compiler accepts -static-libstdc++ (i.e. mingw)...
@@ -179,16 +182,37 @@ if test "${TEA_PLATFORM}" = "windows" ; then
 
 else
     CLEANFILES="pkgIndex.tcl"
-    if test "${TEA_WINDOWINGSYSTEM}" = "aqua" ; then
+    if test "${USE_SDL}" = "yes" ; then
+	TEA_ADD_SOURCES([sdl/tkSDLAGGPath.cpp])
+	TEA_ADD_CFLAGS([-DPLATFORM_SDL=1])
+	TEA_ADD_INCLUDES([${TK_INCLUDE_SPEC}])
+	TEA_ADD_INCLUDES([`sdl2-config --cflags`])
+	TEA_ADD_INCLUDES([-I\"${TK_SRC_DIR}/sdl/agg-2.4/agg2d\"])
+	TEA_ADD_INCLUDES([-I\"${TK_SRC_DIR}/sdl/agg-2.4/include\"])
+	TEA_ADD_INCLUDES([-I\"${TK_SRC_DIR}/sdl/agg-2.4/font_freetype\"])
+	TEA_ADD_LIBS([-L\"${TK_SRC_DIR}/sdl\" -lagg])
+	TEA_ADD_INCLUDES([`freetype-config --cflags`])
+	TEA_ADD_LIBS([`freetype-config --libs`])
+	if test "${TEA_PLATFORM}" = "windows" ; then
+	    AC_PROG_CXX
+	    CC=${CXX}
+
+	    CLEANFILES="pkgIndex.tcl *.lib *.dll *.exp *.ilk *.pdb vc*.pch"
+	    ## Check if the compiler accepts -static-libstdc++ (i.e. mingw)...
+	    AC_CACHE_CHECK([if the compiler understands -static-libstdc++],
+		tcl_cv_cc_staticlib, [
+		hold_cflags=$CFLAGS; CFLAGS="$CFLAGS -static-libstdc++"
+		AC_TRY_COMPILE(,, tcl_cv_cc_staticlib=yes, tcl_cv_cc_staticlib=no)
+		CFLAGS=$hold_cflags])
+	fi
+    elif test "${TEA_WINDOWINGSYSTEM}" = "aqua" ; then
 	TEA_ADD_SOURCES([macosx/tkMacOSXPath.c])
-	TEA_ADD_LIBS([-arch i386 -arch x86_64])
 	TEA_ADD_LIBS([-framework Carbon])
 	TEA_ADD_LIBS([-framework CoreServices])
 	TEA_ADD_LIBS([-framework CoreFoundation])
 	TEA_ADD_LIBS([-framework Cocoa])
 	TEA_ADD_LIBS([-framework IOKit])
 	TEA_ADD_CFLAGS([-x objective-c])
-	TEA_ADD_CFLAGS([-arch i386 -arch x86_64])
 	TEA_ADD_CFLAGS([-DTCL_NO_DEPRECATED])
     else
 	TEA_ADD_SOURCES([unix/tkUnixCairoPath.c])
@@ -276,7 +300,7 @@ if test "${TEA_PLATFORM}" = "windows" ; then
   ## and linker options...
   if test $tcl_cv_cc_staticlib = yes; then
       CFLAGS="$CFLAGS -static-libgcc -static-libstdc++"
-      SHLIB_LD="$SHLIB_LD -static-libgcc -static-libstdc++"
+      SHLIB_LD="$SHLIB_LD -static -static-libgcc -static-libstdc++"
   fi
 fi
 

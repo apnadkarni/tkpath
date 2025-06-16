@@ -6,7 +6,6 @@
  *
  * Copyright (c) 2005-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include "tkIntPath.h"
@@ -14,10 +13,6 @@
 #include "tkCanvArrow.h"
 #include "tkpCanvas.h"
 #include "tkPathStyle.h"
-
-int gDebugLevel = 2;
-
-#define PATH_DEBUG 0
 
 /* Values for the PathItem's flag. */
 
@@ -49,18 +44,18 @@ typedef struct PathItem  {
  */
 
 static void	ComputePathBbox(Tk_PathCanvas canvas, PathItem *pathPtr);
-static int	ConfigurePath(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-                        Tk_PathItem *itemPtr, int objc,
-                        Tcl_Obj *CONST objv[], int flags);
+static int	ConfigurePath(Tcl_Interp *interp, Tk_PathCanvas canvas,
+                        Tk_PathItem *itemPtr, Tcl_Size objc,
+                        Tcl_Obj *const objv[], int flags);
 static int	CreatePath(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	ProcessPath(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PathCoords(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *CONST objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePath(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPath(Tk_PathCanvas canvas,
@@ -70,15 +65,21 @@ static void	PathBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 		    int mask);
 static int	PathToArea(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *areaPtr);
+static int	PathToPdf(Tcl_Interp *interp,
+                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
+			Tcl_Obj *const objv[], int prepass);
 static double	PathToPoint(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *coordPtr);
+#ifndef TKP_NO_POSTSCRIPT
 static int	PathToPostscript(Tcl_Interp *interp,
-                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
-static void	ScalePath(Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, double originX, double originY,
-                        double scaleX, double scaleY);
-static void	TranslatePath(Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, double deltaX, double deltaY);
+                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int prepass);
+#endif
+static void	ScalePath(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int compensate, double originX, double originY,
+			double scaleX, double scaleY);
+static void	TranslatePath(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			int compensate, double deltaX, double deltaY);
 static int      ConfigureArrows(Tk_PathCanvas canvas, PathItem *pathPtr);
 
 /* Support functions. */
@@ -103,8 +104,6 @@ static Tk_OptionSpec optionSpecs[] = {
     PATH_OPTION_SPEC_END
 };
 
-static Tk_OptionTable optionTable = NULL;
-
 /*
  * The structures below defines the 'path' item type by means
  * of procedures that can be invoked by generic item code.
@@ -123,7 +122,10 @@ Tk_PathItemType tkPathType = {
     PathBbox,                   /* bboxProc */
     PathToPoint,		/* pointProc */
     PathToArea,			/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     PathToPostscript,		/* postscriptProc */
+#endif
+    PathToPdf,			/* pdfProc */
     ScalePath,			/* scaleProc */
     TranslatePath,		/* translateProc */
     (Tk_PathItemIndexProc *) NULL,      /* indexProc */
@@ -134,27 +136,12 @@ Tk_PathItemType tkPathType = {
     (Tk_PathItemType *) NULL,		/* nextPtr */
 };
 
-void
-DebugPrintf(Tcl_Interp *interp, int level, char *fmt, ...)
-{
-    va_list	args;
-    char	tmpstr[256];
-    
-    if (level > gDebugLevel) {
-        return;
-    }
-    va_start( args, fmt );
-    vsprintf( tmpstr, fmt, args );	
-    Tcl_VarEval( interp, "puts \"", tmpstr, "\"", (char *) NULL );
-    va_end (args );
-}
-
 /* Be sure rect is not empty (see above) before doing this. */
 static void
 NormalizePathRect(PathRect *r)
 {
     double min, max;
-    
+
     min = MIN(r->x1, r->x2);
     max = MAX(r->x1, r->x2);
     r->x1 = min;
@@ -165,8 +152,8 @@ NormalizePathRect(PathRect *r)
     r->y2 = max;
 }
 
-/* 
- +++ This starts the canvas item part +++ 
+/*
+ +++ This starts the canvas item part +++
  */
 
 /*
@@ -194,11 +181,12 @@ CreatePath(
     Tcl_Interp *interp, 	/* Used for error reporting. */
     Tk_PathCanvas canvas, 	/* Canvas containing item. */
     Tk_PathItem *itemPtr, 	/* Item to create. */
-    int objc,                   /* Number of elements in objv.  */
-    Tcl_Obj *CONST objv[])	/* Arguments describing the item. */
+    Tcl_Size objc,                   /* Number of elements in objv.  */
+    Tcl_Obj *const objv[])	/* Arguments describing the item. */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &pathPtr->headerEx;
+    Tk_OptionTable optionTable;
 
     if (objc == 0) {
         Tcl_Panic("canvas did not pass any coords\n");
@@ -223,15 +211,13 @@ CreatePath(
     TkPathArrowDescrInit(&pathPtr->startarrow);
     TkPathArrowDescrInit(&pathPtr->endarrow);
     pathPtr->flags = 0L;
-    
+
     /* Forces a computation of the normalized path in PathCoords. */
     pathPtr->flags |= kPathItemNeedNewNormalizedPath;
 
-    if (optionTable == NULL) {
-        optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) pathPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) pathPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -282,17 +268,20 @@ ProcessPath(
     Tk_PathCanvas canvas,   /* Canvas containing item. */
     Tk_PathItem *itemPtr,   /* Item whose coordinates are to be
                              * read or modified. */
-    int objc,               /*  */
-    Tcl_Obj *CONST objv[])  /*  */
+    Tcl_Size objc,
+    Tcl_Obj *const objv[])  /*  */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     PathAtom *atomPtr = NULL;
-    int result, len;
-    
+    Tcl_Size len;
+    int result;
+
     if (objc == 0) {
         /* @@@ We have an option here if to return the normalized or original path. */
-        //Tcl_SetObjResult(interp, pathPtr->pathObjPtr);
-        
+#if 0
+        Tcl_SetObjResult(interp, pathPtr->pathObjPtr);
+#endif
+
         /* We may need to recompute the normalized path from the atoms. */
         if (pathPtr->flags & kPathItemNeedNewNormalizedPath) {
             if (pathPtr->normPathObjPtr != NULL) {
@@ -307,7 +296,7 @@ ProcessPath(
     } else if (objc == 1) {
         result = TkPathParseToAtoms(interp, objv[0], &atomPtr, &len);
         if (result == TCL_OK) {
-        
+
             /* Free any old atoms. */
             if (pathPtr->atomPtr != NULL) {
                 TkPathFreeAtoms(pathPtr->atomPtr);
@@ -352,12 +341,12 @@ PathCoords(
     Tk_PathCanvas canvas,   /* Canvas containing item. */
     Tk_PathItem *itemPtr,   /* Item whose coordinates are to be
                              * read or modified. */
-    int objc,               /*  */
-    Tcl_Obj *CONST objv[])  /*  */
+    Tcl_Size objc,
+    Tcl_Obj *const objv[])  /*  */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     int result;
-    
+
     result = ProcessPath(interp, canvas, itemPtr, objc, objv);
     if ((result == TCL_OK) && (objc == 1)) {
         ConfigureArrows(canvas, pathPtr);
@@ -395,7 +384,7 @@ ComputePathBbox(
     Tk_PathStyle style;
     Tk_PathState state = itemExPtr->header.state;
 
-    if(state == TK_PATHSTATE_NULL) {
+    if (state == TK_PATHSTATE_NULL) {
         state = TkPathCanvasState(canvas);
     }
     if (pathPtr->pathObjPtr == NULL || (pathPtr->pathLen < 4) || (state == TK_PATHSTATE_HIDDEN)) {
@@ -404,7 +393,7 @@ ComputePathBbox(
         return;
     }
     style = TkPathCanvasInheritStyle(itemPtr, kPathMergeStyleNotFill);
-    
+
     /*
      * Get an approximation of the path's bounding box
      * assuming zero stroke width.
@@ -427,19 +416,23 @@ ConfigureArrows(
     PathPoint ppenult;
     PathPoint *plastp;
 
-    int error = getSegmentsFromPathAtomList(pathPtr->atomPtr, &pfirstp, &psecond, &ppenult, &plastp);
+    int error = GetSegmentsFromPathAtomList(pathPtr->atomPtr, &pfirstp,
+			&psecond, &ppenult, &plastp);
 
     if (error == TCL_OK) {
         PathPoint pfirst = *pfirstp;
         PathPoint plast = *plastp;
         Tk_PathStyle *lineStyle = &pathPtr->headerEx.style;
-        int isOpen = lineStyle->fill==NULL && ((pfirst.x != plast.x) || (pfirst.y != plast.y));
+        int isOpen = lineStyle->fill==NULL &&
+		((pfirst.x != plast.x) || (pfirst.y != plast.y));
 
         TkPathPreconfigureArrow(&pfirst, &pathPtr->startarrow);
         TkPathPreconfigureArrow(&plast, &pathPtr->endarrow);
 
-        *pfirstp = TkPathConfigureArrow(pfirst, psecond, &pathPtr->startarrow, lineStyle, isOpen);
-        *plastp = TkPathConfigureArrow(plast, ppenult, &pathPtr->endarrow, lineStyle, isOpen);
+        *pfirstp = TkPathConfigureArrow(pfirst, psecond,
+			&pathPtr->startarrow, lineStyle, isOpen);
+        *plastp = TkPathConfigureArrow(plast, ppenult, &pathPtr->endarrow,
+			lineStyle, isOpen);
     } else {
         TkPathFreeArrow(&pathPtr->startarrow);
         TkPathFreeArrow(&pathPtr->endarrow);
@@ -466,20 +459,20 @@ ConfigureArrows(
  *
  *--------------------------------------------------------------
  */
+
 static int
 ConfigurePath(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Line item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
-    Tcl_Obj *CONST objv[],	/* Arguments describing things to configure. */
+    Tcl_Size objc,		/* Number of elements in objv.  */
+    Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &pathPtr->headerEx;
     Tk_PathStyle *stylePtr = &itemExPtr->style;
     Tk_Window tkwin;
-    //Tk_PathState state;
     Tk_SavedOptions savedOptions;
     Tcl_Obj *errorResult = NULL;
     int mask, error;
@@ -487,7 +480,7 @@ ConfigurePath(
     tkwin = Tk_PathCanvasTkwin(canvas);
     for (error = 0; error <= 1; error++) {
 	if (!error) {
-	    if (Tk_SetOptions(interp, (char *) pathPtr, optionTable, 
+	    if (Tk_SetOptions(interp, (char *) pathPtr, itemPtr->optionTable,
 		    objc, objv, tkwin, &savedOptions, &mask) != TCL_OK) {
 		continue;
 	    }
@@ -495,7 +488,7 @@ ConfigurePath(
 	    errorResult = Tcl_GetObjResult(interp);
 	    Tcl_IncrRefCount(errorResult);
 	    Tk_RestoreSavedOptions(&savedOptions);
-	}	
+	}
 	if (TkPathCanvasItemExConfigure(interp, canvas, itemExPtr, mask) != TCL_OK) {
 	    continue;
 	}
@@ -509,20 +502,9 @@ ConfigurePath(
 	Tk_FreeSavedOptions(&savedOptions);
 	stylePtr->mask |= mask;
     }
-    
+
     stylePtr->strokeOpacity = MAX(0.0, MIN(1.0, stylePtr->strokeOpacity));
     stylePtr->fillOpacity   = MAX(0.0, MIN(1.0, stylePtr->fillOpacity));
-
-#if 0	    // From old code. Needed?
-    state = itemPtr->state;
-    if(state == TK_PATHSTATE_NULL) {
-        state = TkPathCanvasState(canvas);
-    }
-    if (state == TK_PATHSTATE_HIDDEN) {
-        //ComputePathBbox(canvas, pathPtr);
-        return TCL_OK;
-    }
-#endif    
 
     ConfigureArrows(canvas, pathPtr);
 
@@ -585,7 +567,8 @@ DeletePath(
     }
     TkPathFreeArrow(&pathPtr->startarrow);
     TkPathFreeArrow(&pathPtr->endarrow);
-    Tk_FreeConfigOptions((char *) pathPtr, optionTable, Tk_PathCanvasTkwin(canvas));
+    Tk_FreeConfigOptions((char *) pathPtr, itemPtr->optionTable,
+			 Tk_PathCanvasTkwin(canvas));
 }
 
 /*
@@ -619,14 +602,10 @@ DisplayPath(
     PathItem *pathPtr = (PathItem *) itemPtr;
     TMatrix m = GetCanvasTMatrix(canvas);
     Tk_PathStyle style;
-    
-    /* === EB - 23-apr-2010: register coordinate offsets */
-    TkPathSetCoordOffsets(m.tx, m.ty);
-    /* === */
-    
+
     if (pathPtr->pathLen > 2) {
         style = TkPathCanvasInheritStyle(itemPtr, 0);
-        TkPathDrawPath(Tk_PathCanvasTkwin(canvas), drawable, pathPtr->atomPtr, 
+        TkPathDrawPath(Tk_PathCanvasTkwin(canvas), drawable, pathPtr->atomPtr,
                 &style, &m, &itemPtr->bbox);
         /*
          * Display arrowheads, if they are wanted.
@@ -638,14 +617,14 @@ DisplayPath(
     }
 }
 
-static void	
+static void
 PathBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask)
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     /*
      * Try to be economical here.
      */
-    if ((mask & PATH_STYLE_OPTION_MATRIX) || 
+    if ((mask & PATH_STYLE_OPTION_MATRIX) ||
             (mask & PATH_STYLE_OPTION_STROKE) ||
             (mask & PATH_STYLE_OPTION_STROKE_WIDTH) ||
             (mask & PATH_CORE_OPTION_PARENT) ||
@@ -686,7 +665,7 @@ PathToPoint(
     double dist;
 
     style = TkPathCanvasInheritStyle(itemPtr, 0);
-    dist = GenericPathToPoint(canvas, itemPtr, &style, atomPtr, 
+    dist = GenericPathToPoint(canvas, itemPtr, &style, atomPtr,
             pathPtr->maxNumSegments, pointPtr);
     TkPathCanvasFreeInheritedStyle(&style);
     return dist;
@@ -694,6 +673,7 @@ PathToPoint(
 
 /**********************************/
 
+#ifdef NOWHERE_USED
 double
 TkLineToPoint2(
     double end1Ptr[2],		/* Coordinates of first end-point of line. */
@@ -722,7 +702,7 @@ TkLineToPoint2(
      * If larger then c2 > a2 + b2 and end1 is closest to point
      * Similar for end2 with b and c interchanged.
      */
-     
+
     dx = end1Ptr[0] - end2Ptr[0];
     dy = end1Ptr[1] - end2Ptr[1];
     a2 = dx*dx + dy*dy;
@@ -734,15 +714,15 @@ TkLineToPoint2(
     dx = end2Ptr[0] - pointPtr[0];
     dy = end2Ptr[1] - pointPtr[1];
     c2 = dx*dx + dy*dy;
-    
+
     if (c2 >= a2 + b2) {
         return sqrt(b2);
     } else if (b2 >= a2 + c2) {
         return sqrt(c2);
     } else {
         double delta;
-        
-        /* 
+
+        /*
          * The closest point is found at the point between end1 and end2
          * that is perp to point. delta is the distance from end1 along
          * that line which is closest to point.
@@ -751,9 +731,10 @@ TkLineToPoint2(
         return sqrt(MAX(0.0, b2 - delta*delta));
     }
 }
+#endif
 
-/* 
- * Get maximum number of segments needed to describe path. 
+/*
+ * Get maximum number of segments needed to describe path.
  * Needed to see if we can use static space or need to allocate more.
  */
 
@@ -769,8 +750,8 @@ GetArcNumSegments(double currentX, double currentY, ArcAtom *arc)
 
     result = EndpointToCentralArcParameters(
             currentX, currentY,
-            arc->x, arc->y, arc->radX, arc->radY, 
-            DEGREES_TO_RADIANS * arc->angle, 
+            arc->x, arc->y, arc->radX, arc->radY,
+            DEGREES_TO_RADIANS * arc->angle,
             arc->largeArcFlag, arc->sweepFlag,
             &cx, &cy, &rx, &ry,
             &theta1, &dtheta);
@@ -780,7 +761,7 @@ GetArcNumSegments(double currentX, double currentY, ArcAtom *arc)
         return 0;
     }
 
-    /* Estimate the number of steps needed. 
+    /* Estimate the number of steps needed.
      * Max 10 degrees or length 50.
      */
     ntheta = (int) (dtheta/5.0 + 0.5);
@@ -801,12 +782,12 @@ GetSubpathMaxNumSegments(PathAtom *atomPtr)
     ArcAtom 	*arc;
     QuadBezierAtom *quad;
     CurveToAtom *curve;
-    
+
     num = 0;
     maxNumSegments = 0;
-    
+
     while (atomPtr != NULL) {
-    
+
         switch (atomPtr->type) {
             case PATH_ATOM_M: {
                 move = (MoveToAtom *) atomPtr;
@@ -873,7 +854,7 @@ GetSubpathMaxNumSegments(PathAtom *atomPtr)
  *	This procedure is called to determine whether an item
  *	lies entirely inside, entirely outside, or overlapping
  *	a given rectangular area.
- *	
+ *
  *	Each subpath is treated in turn. Generate straight line
  *	segments for each subpath and treat it as a polygon.
  *
@@ -899,11 +880,11 @@ PathToArea(
     PathItem *pathPtr = (PathItem *) itemPtr;
     Tk_PathStyle style;
     int area;
-   
+
     style = TkPathCanvasInheritStyle(itemPtr, 0);
-    area = GenericPathToArea(canvas, itemPtr, &style, 
+    area = GenericPathToArea(canvas, itemPtr, &style,
             pathPtr->atomPtr, pathPtr->maxNumSegments, areaPtr);
-    TkPathCanvasFreeInheritedStyle(&style);            
+    TkPathCanvasFreeInheritedStyle(&style);
     return area;
 }
 
@@ -931,19 +912,21 @@ static void
 ScalePath(
     Tk_PathCanvas canvas,           /* Canvas containing line. */
     Tk_PathItem *itemPtr,           /* Path to be scaled. */
+    int compensate,		    /* Compensate matrix. */
     double originX, double originY, /* Origin about which to scale rect. */
     double scaleX,                  /* Amount to scale in X direction. */
     double scaleY)                  /* Amount to scale in Y direction. */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     PathAtom *atomPtr = pathPtr->atomPtr;
-    PathRect r;
-    
+
+    CompensateScale(itemPtr, compensate, &originX, &originY, &scaleX, &scaleY);
+
     /* @@@ TODO: Arc atoms with nonzero rotation angle is WRONG! */
 
     ScalePathAtoms(atomPtr, originX, originY, scaleX, scaleY);
-    
-    /* 
+
+    /*
      * Set flags bit so we know that PathCoords need to update the
      * normalized path before being used.
      */
@@ -952,9 +935,7 @@ ScalePath(
     /* Just scale the bbox'es as well. */
     ScalePathRect(&itemPtr->bbox, originX, originY, scaleX, scaleY);
     NormalizePathRect(&itemPtr->bbox);
-    
-    ScalePathRect(&itemPtr->totalBbox, originX, originY, scaleX, scaleY);
-    NormalizePathRect(&r);
+
     TkPathScaleArrow(&pathPtr->startarrow, originX, originY, scaleX, scaleY);
     TkPathScaleArrow(&pathPtr->endarrow, originX, originY, scaleX, scaleY);
     ConfigureArrows(canvas, pathPtr);
@@ -983,15 +964,18 @@ static void
 TranslatePath(
     Tk_PathCanvas canvas,       /* Canvas containing item. */
     Tk_PathItem *itemPtr, 	/* Item that is being moved. */
+    int compensate,		/* Compensate matrix. */
     double deltaX,		/* Amount by which item is to be */
     double deltaY)              /* moved. */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
     PathAtom *atomPtr = pathPtr->atomPtr;
-    
+
+    CompensateTranslate(itemPtr, compensate, &deltaX, &deltaY);
+
     TranslatePathAtoms(atomPtr, deltaX, deltaY);
-    
-    /* 
+
+    /*
      * Set flags bit so we know that PathCoords need to update the
      * normalized path before being used.
      */
@@ -999,12 +983,72 @@ TranslatePath(
 
     /* Just translate the bbox'es as well. */
     TranslatePathRect(&itemPtr->bbox, deltaX, deltaY);
-    TranslatePathRect(&itemPtr->totalBbox, deltaX, deltaY);
     TkPathTranslateArrow(&pathPtr->startarrow, deltaX, deltaY);
     TkPathTranslateArrow(&pathPtr->endarrow, deltaX, deltaY);
     TranslateItemHeader(itemPtr, deltaX, deltaY);
 }
 
+/*
+ *--------------------------------------------------------------
+ *
+ * PathToPdf --
+ *
+ *	This procedure is called to generate Pdf for
+ *	path items.
+ *
+ * Results:
+ *	The return value is a standard Tcl result.  If an error
+ *	occurs in generating Pdf then an error message is
+ *	left in the interp's result, replacing whatever used
+ *	to be there.  If no error occurs, then Pdf for the
+ *	item is appended to the result.
+ *
+ * Side effects:
+ *	None.
+ *
+ *--------------------------------------------------------------
+ */
+
+static int
+PathToPdf(
+    Tcl_Interp *interp,     /* Leave Pdf or error message
+                             * here. */
+    Tk_PathCanvas canvas,   /* Information about overall canvas. */
+    Tk_PathItem *itemPtr,   /* Item for which Pdf is
+                             * wanted. */
+    Tcl_Size objc,          /* Number of arguments. */
+    Tcl_Obj *const objv[],  /* Argument list. */
+    int prepass)            /* 1 means this is a prepass to
+                             * collect font information;  0 means
+                             * final Pdf is being created. */
+{
+    Tk_PathStyle style;
+    PathItem *pathPtr = (PathItem *) itemPtr;
+    Tk_PathState state = itemPtr->state;
+    int result = TCL_OK;
+
+    if (state == TK_PATHSTATE_NULL) {
+        state = TkPathCanvasState(canvas);
+    }
+    if ((pathPtr->pathObjPtr == NULL) || (state == TK_PATHSTATE_HIDDEN)) {
+	return result;
+    }
+    if (pathPtr->pathLen > 2) {
+	style = TkPathCanvasInheritStyle(itemPtr, 0);
+	result = TkPathPdf(interp, pathPtr->atomPtr, &style, &itemPtr->bbox,
+			   objc, objv);
+	if (result == TCL_OK) {
+	    result = TkPathPdfArrow(interp, &pathPtr->startarrow, &style);
+	    if (result == TCL_OK) {
+		result = TkPathPdfArrow(interp, &pathPtr->endarrow, &style);
+	    }
+	}
+	TkPathCanvasFreeInheritedStyle(&style);
+    }
+    return result;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
 /*
  *--------------------------------------------------------------
  *
@@ -1039,5 +1083,12 @@ PathToPostscript(
 {
     return TCL_ERROR;
 }
-
-
+#endif
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

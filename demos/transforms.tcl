@@ -6,9 +6,9 @@ toplevel $t
 set w $t.c
 pack [tkp::canvas $w -bg white -width 480 -height 300]
 
-set mskewx1 [::tkp::transform skewx 0.3]
-set mskewx2 [::tkp::transform skewx 0.5]
-set mrot    [::tkp::transform rotate [expr 3.1415/4] 100 100]
+set mskewx1 [::tkp::matrix skewx 0.3]
+set mskewx2 [::tkp::matrix skewx 0.5]
+set mrot    [::tkp::matrix rotate [expr 3.1415/4] 100 100]
 
 set g1 [$w gradient create linear -stops {{0 lightblue} {1 blue}}]
 $w create path "M 10 10 h 200 v 50 h -200 z" -fill $g1 -matrix $mskewx1

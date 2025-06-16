@@ -11,9 +11,8 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
- 
+
 /*
  *	Copied here from tkTrig.c when they contain arguments
  *	specific for the canvas implementaion.
@@ -53,7 +52,7 @@
 	/* ARGSUSED */
 void
 TkPathIncludePoint(
-    register Tk_PathItem *itemPtr,/* Item whose bounding box is being
+    Tk_PathItem *itemPtr,	/* Item whose bounding box is being
 				 * calculated. */
     double *pointPtr)		/* Address of two doubles giving x and y
 				 * coordinates of point. */
@@ -103,7 +102,7 @@ TkPathBezierScreenPoints(
     double control[],		/* Array of coordinates for four control
 				 * points: x0, y0, x1, y1, ... x3 y3. */
     int numSteps,		/* Number of curve points to generate. */
-    register XPoint *xPointPtr)	/* Where to put new points. */
+    XPoint *xPointPtr)		/* Where to put new points. */
 {
     int i;
     double u, u2, u3, t, t2, t3;
@@ -149,7 +148,7 @@ TkPathBezierPoints(
     double control[],		/* Array of coordinates for four control
 				 * points: x0, y0, x1, y1, ... x3 y3. */
     int numSteps,		/* Number of curve points to generate. */
-    register double *coordPtr)	/* Where to put new points. */
+    double *coordPtr)		/* Where to put new points. */
 {
     int i;
     double u, u2, u3, t, t2, t3;
@@ -528,6 +527,7 @@ TkPathMakeRawCurve(
     return outputPoints;
 }
 
+#ifndef TKP_NO_POSTSCRIPT
 /*
  *--------------------------------------------------------------
  *
@@ -731,6 +731,12 @@ TkPathMakeRawCurvePostscript(
 	Tcl_AppendResult(interp, buffer, NULL);
     }
 }
+#endif /* TKP_POSTSCRIPT */
 
-
-
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

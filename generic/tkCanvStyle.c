@@ -5,15 +5,14 @@
  *
  * Copyright (c) 2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include "tkIntPath.h"
 #include "tkpCanvas.h"
 
-static char *	kStyleNameBase = "style";
+static const char *kStyleNameBase = "style";
 
-static CONST char *styleCmds[] = {
+static const char *styleCmds[] = {
     "cget", "configure", "create", "delete", "inuse", "names",
     (char *) NULL
 };
@@ -32,7 +31,7 @@ enum {
  *
  * CanvasStyleObjCmd --
  *
- *	Implements the 'pathName style' command using the canvas local state.  
+ *	Implements the 'pathName style' command using the canvas local state.
  *
  * Results:
  *	Standard Tcl result
@@ -43,13 +42,13 @@ enum {
  *----------------------------------------------------------------------
  */
 
-int 				
-CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr, 
-	int objc, Tcl_Obj* CONST objv[])
+int
+CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
+	int objc, Tcl_Obj* const objv[])
 {
     int index;
     int result = TCL_OK;
-    
+
     /*
      * objv[2] is the subcommand: cget | configure | create | delete | names
      */
@@ -62,8 +61,8 @@ CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
         return TCL_ERROR;
     }
     switch (index) {
-	    
-        case kPathStyleCmdCget: {            
+
+        case kPathStyleCmdCget: {
 	    if (objc != 5) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name option");
 		return TCL_ERROR;
@@ -72,17 +71,17 @@ CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 		    &canvasPtr->styleTable);
             break;
         }
-	    
+
         case kPathStyleCmdConfigure: {
 	    if (objc < 4) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name ?option? ?value option value...?");
 		return TCL_ERROR;
 	    }
-	    result = PathStyleConfigure(interp, canvasPtr->tkwin, objc-3, objv+3, 
+	    result = PathStyleConfigure(interp, canvasPtr->tkwin, objc-3, objv+3,
 		    &canvasPtr->styleTable, &canvasPtr->gradientTable);
             break;
         }
-	    
+
         case kPathStyleCmdCreate: {
 	    char str[255];
 
@@ -91,11 +90,11 @@ CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 		return TCL_ERROR;
 	    }
             sprintf(str, "%s%d", kStyleNameBase, canvasPtr->styleUid++);
-	    result = PathStyleCreate(interp, canvasPtr->tkwin, objc-3, objv+3, 
+	    result = PathStyleCreate(interp, canvasPtr->tkwin, objc-3, objv+3,
 		    &canvasPtr->styleTable, &canvasPtr->gradientTable, str);
             break;
         }
-	    
+
         case kPathStyleCmdDelete: {
 	    if (objc != 4) {
 		Tcl_WrongNumArgs(interp, 3, objv, "name");
@@ -114,7 +113,7 @@ CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
 	    result = PathStyleInUse(interp, objv[3], &canvasPtr->styleTable);
 	    break;
 	}
-	    
+
         case kPathStyleCmdNames: {
 	    if (objc != 3) {
 		Tcl_WrongNumArgs(interp, 3, objv, NULL);
@@ -126,3 +125,11 @@ CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
     }
     return result;
 }
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

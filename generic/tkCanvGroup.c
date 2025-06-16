@@ -6,7 +6,6 @@
  *
  * Copyright (c) 2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include <float.h>
@@ -15,14 +14,11 @@
 #include "tkCanvPathUtil.h"
 #include "tkPathStyle.h"
 
-/* For debugging. */
-extern Tcl_Interp *gInterp;
-
 enum {
     /* When childs update themself so they set all
      * its ancestors dirty bbox flag so they know
      * when they need to recompute its bbox. */
-    GROUP_FLAG_DIRTY_BBOX	    = (1L << 0)	    
+    GROUP_FLAG_DIRTY_BBOX	    = (1L << 0)
 };
 
 /*
@@ -43,12 +39,12 @@ typedef struct GroupItem  {
  */
 
 void		GroupUpdateBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr);
-static int	ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-		    Tk_PathItem *itemPtr, int objc,
-		    Tcl_Obj *CONST objv[], int flags);
+static int	ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
+		    Tcl_Obj *const objv[], int flags);
 static int	CreateGroup(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *CONST objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeleteGroup(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayGroup(Tk_PathCanvas canvas,
@@ -57,18 +53,23 @@ static void	DisplayGroup(Tk_PathCanvas canvas,
 static void	GroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int flags);
 static int	GroupCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *CONST objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	GroupToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
+static int	GroupToPdf(Tcl_Interp *interp,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
+		    Tcl_Obj *const objv[], int prepass);
 static double	GroupToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
+#ifndef TKP_NO_POSTSCRIPT
 static int	GroupToPostscript(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
-static void	ScaleGroup(Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, double originX, double originY,
+#endif
+static void	ScaleGroup(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+		    int compensate, double originX, double originY,
 		    double scaleX, double scaleY);
-static void	TranslateGroup(Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, double deltaX, double deltaY);
+static void	TranslateGroup(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+		    int compensate, double deltaX, double deltaY);
 
 
 PATH_STYLE_CUSTOM_OPTION_RECORDS
@@ -85,8 +86,6 @@ static Tk_OptionSpec optionSpecs[] = {
     PATH_OPTION_SPEC_STYLE_STROKE(Tk_PathItemEx, "black"),
     PATH_OPTION_SPEC_END
 };
-
-static Tk_OptionTable optionTable = NULL;
 
 /*
  * The structures below defines the 'prect' item type by means
@@ -106,7 +105,10 @@ Tk_PathItemType tkGroupType = {
     GroupBbox,				/* bboxProc */
     GroupToPoint,			/* pointProc */
     GroupToArea,			/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     GroupToPostscript,			/* postscriptProc */
+#endif
+    GroupToPdf,				/* pdfProc */
     ScaleGroup,				/* scaleProc */
     TranslateGroup,			/* translateProc */
     (Tk_PathItemIndexProc *) NULL,	/* indexProc */
@@ -118,13 +120,14 @@ Tk_PathItemType tkGroupType = {
 };
 
 
-static int	
+static int
 CreateGroup(Tcl_Interp *interp,
 	Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *CONST objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     GroupItem *groupPtr = (GroupItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &groupPtr->headerEx;
+    Tk_OptionTable optionTable;
 
     /*
      * Carry out initialization that is needed to set defaults and to
@@ -139,12 +142,10 @@ CreateGroup(Tcl_Interp *interp,
     groupPtr->flags = 0L;
     itemExPtr->header.x1 = itemExPtr->header.x2 =
     itemExPtr->header.y1 = itemExPtr->header.y2 = -1;
-    
-    if (optionTable == NULL) {
-	optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) groupPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) groupPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -162,16 +163,15 @@ error:
     return TCL_ERROR;
 }
 
-static int	
-ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-	Tk_PathItem *itemPtr, int objc,
-        Tcl_Obj *CONST objv[], int flags)
+static int
+ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
+	Tk_PathItem *itemPtr, Tcl_Size objc,
+        Tcl_Obj *const objv[], int flags)
 {
     GroupItem *groupPtr = (GroupItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &groupPtr->headerEx;
     Tk_PathStyle *stylePtr = &itemExPtr->style;
     Tk_Window tkwin;
-    //Tk_PathState state;
     Tk_SavedOptions savedOptions;
     Tcl_Obj *errorResult = NULL;
     int error, mask;
@@ -179,7 +179,7 @@ ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
     tkwin = Tk_PathCanvasTkwin(canvas);
     for (error = 0; error <= 1; error++) {
 	if (!error) {
-	    if (Tk_SetOptions(interp, (char *) groupPtr, optionTable, 
+	    if (Tk_SetOptions(interp, (char *) groupPtr, itemPtr->optionTable,
 		    objc, objv, tkwin, &savedOptions, &mask) != TCL_OK) {
 		continue;
 	    }
@@ -187,7 +187,7 @@ ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
 	    errorResult = Tcl_GetObjResult(interp);
 	    Tcl_IncrRefCount(errorResult);
 	    Tk_RestoreSavedOptions(&savedOptions);
-	}	
+	}
 	if (TkPathCanvasItemExConfigure(interp, canvas, itemExPtr, mask) != TCL_OK) {
 	    continue;
 	}
@@ -197,13 +197,13 @@ ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
 	 */
 	if (itemPtr->id == 0) {
 	    if (mask & PATH_CORE_OPTION_PARENT) {
-		Tcl_SetObjResult(interp, 
+		Tcl_SetObjResult(interp,
 			Tcl_NewStringObj("root items -parent is not configurable", -1));
 		continue;
 	    }
 	    if (mask & PATH_CORE_OPTION_TAGS) {
-		Tcl_SetObjResult(interp, 
-			Tcl_NewStringObj("root items -tags is not configurable", -1));	
+		Tcl_SetObjResult(interp,
+			Tcl_NewStringObj("root items -tags is not configurable", -1));
 		continue;
 	    }
 	}
@@ -219,7 +219,7 @@ ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
     }
     stylePtr->strokeOpacity = MAX(0.0, MIN(1.0, stylePtr->strokeOpacity));
     stylePtr->fillOpacity   = MAX(0.0, MIN(1.0, stylePtr->fillOpacity));
-    
+
     /*
      * We must notify all children to update themself
      * since they may inherit features.
@@ -227,15 +227,6 @@ ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
     if (!error) {
 	GroupItemConfigured(canvas, itemPtr, mask);
     }
-#if 0	    // From old code. Needed?
-    state = itemPtr->state;
-    if(state == TK_PATHSTATE_NULL) {
-	state = TkPathCanvasState(canvas);
-    }
-    if (state == TK_PATHSTATE_HIDDEN) {
-        return TCL_OK;
-    }
-#endif
     if (error) {
 	Tcl_SetObjResult(interp, errorResult);
 	Tcl_DecrRefCount(errorResult);
@@ -245,7 +236,7 @@ ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
     }
 }
 
-static void	
+static void
 DeleteGroup(Tk_PathCanvas canvas,
     Tk_PathItem *itemPtr, Display *display)
 {
@@ -259,10 +250,11 @@ DeleteGroup(Tk_PathCanvas canvas,
     if (itemExPtr->styleInst != NULL) {
 	TkPathFreeStyle(itemExPtr->styleInst);
     }
-    Tk_FreeConfigOptions((char *) itemPtr, optionTable, Tk_PathCanvasTkwin(canvas));
+    Tk_FreeConfigOptions((char *) itemPtr, itemPtr->optionTable,
+			 Tk_PathCanvasTkwin(canvas));
 }
 
-static void	
+static void
 DisplayGroup(Tk_PathCanvas canvas,
     Tk_PathItem *itemPtr, Display *display, Drawable drawable,
     int x, int y, int width, int height)
@@ -270,23 +262,23 @@ DisplayGroup(Tk_PathCanvas canvas,
     /* Empty. */
 }
 
-static void	
+static void
 GroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int flags)
 {
     /* Empty. */
 }
 
-static int	
+static int
 GroupCoords(Tcl_Interp *interp,
     Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *CONST objv[])
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
-    Tcl_SetObjResult(interp, 
+    Tcl_SetObjResult(interp,
 	    Tcl_NewStringObj("group items have no coords", -1));
     return TCL_ERROR;
 }
 
-static int	
+static int
 GroupToArea(Tk_PathCanvas canvas,
 	Tk_PathItem *itemPtr, double *rectPtr)
 {
@@ -296,7 +288,7 @@ GroupToArea(Tk_PathCanvas canvas,
     return -1;
 }
 
-static double	
+static double
 GroupToPoint(Tk_PathCanvas canvas,
 	Tk_PathItem *itemPtr, double *coordPtr)
 {
@@ -306,27 +298,37 @@ GroupToPoint(Tk_PathCanvas canvas,
     return DBL_MAX;
 }
 
-static int	
+static int
+GroupToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+	Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
+{
+    return TCL_OK;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
+static int
 GroupToPostscript(Tcl_Interp *interp,
 	Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass)
 {
     return TCL_ERROR;
 }
+#endif
 
-static void	
-ScaleGroup(Tk_PathCanvas canvas,
-	Tk_PathItem *itemPtr, double originX, double originY,
+static void
+ScaleGroup(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+	int compensate, double originX, double originY,
 	double scaleX, double scaleY)
 {
-    CanvasScaleGroup(canvas, itemPtr, originX, originY, scaleX, scaleY);
+    CanvasScaleGroup(canvas, itemPtr, compensate,
+	originX, originY, scaleX, scaleY);
     /* @@@ TODO: we could handle bbox ourselves? */
 }
 
-static void	
-TranslateGroup(Tk_PathCanvas canvas,
-	Tk_PathItem *itemPtr, double deltaX, double deltaY)
+static void
+TranslateGroup(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+	int compensate, double deltaX, double deltaY)
 {
-    CanvasTranslateGroup(canvas, itemPtr, deltaX, deltaY);
+    CanvasTranslateGroup(canvas, itemPtr, compensate, deltaX, deltaY);
     /* @@@ TODO: we could handle bbox ourselves? */
 }
 
@@ -356,16 +358,22 @@ TkPathCanvasSetGroupDirtyBbox(Tk_PathItem *itemPtr)
     groupPtr->flags &= GROUP_FLAG_DIRTY_BBOX;
 }
 
-void	
+void
 TkPathCanvasUpdateGroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr)
 {
     GroupItem *groupPtr = (GroupItem *) itemPtr;
 
     if (groupPtr->flags & GROUP_FLAG_DIRTY_BBOX) {
 	TkPathCanvasGroupBbox(canvas, itemPtr,
-		&itemPtr->x1, &itemPtr->y1, &itemPtr->x2, &itemPtr->y2);    
+		&itemPtr->x1, &itemPtr->y1, &itemPtr->x2, &itemPtr->y2);
 	groupPtr->flags &= ~GROUP_FLAG_DIRTY_BBOX;
     }
 }
-
-
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

@@ -6,7 +6,6 @@
  *
  * Copyright (c) 2005-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #ifndef INCLUDED_TKPATH_H
@@ -58,20 +57,20 @@ typedef struct PathPoint {
  *		| c  d  0 |
  *		| tx ty 1 |
  */
- 
+
 typedef struct TMatrix {
     double a, b, c, d;
     double tx, ty;
 } TMatrix;
 
 /*
- * Records used for parsing path to a linked list of primitive 
+ * Records used for parsing path to a linked list of primitive
  * drawing instructions.
  *
  * PathAtom: vaguely modelled after Tk_PathItem. Each atom has a PathAtom record
  * in its first position, padded with type specific data.
  */
- 
+
 typedef struct PathAtom {
     PathAtomType type;		/* Type of PathAtom. */
     struct PathAtom *nextPtr;	/* Next PathAtom along the path. */
@@ -84,7 +83,7 @@ typedef void (TkPathStyleChangedProc)(ClientData clientData, int flags);
  * Records for gradient fills.
  * We need a separate GradientStopArray to simplify option parsing.
  */
- 
+
 typedef struct GradientStop {
     double offset;
     XColor *color;
@@ -137,7 +136,7 @@ typedef struct TkPathGradientMaster {
     TMatrix *matrixPtr;		/*  a  b   default (NULL): 1 0
                                     c  d		   0 1
                                     tx ty 		   0 0 */
-    
+
     struct TkPathGradientInst *instancePtr;
 				/* Pointer to first in list of instances
 				 * derived from this gradient name. */
@@ -147,8 +146,8 @@ typedef struct TkPathGradientMaster {
     };
 } TkPathGradientMaster;
 
-/* 
- * This defines an instance of a gradient with specified name and hash table. 
+/*
+ * This defines an instance of a gradient with specified name and hash table.
  */
 typedef struct TkPathGradientInst {
     struct TkPathGradientMaster *masterPtr;
@@ -165,7 +164,7 @@ typedef struct TkPathGradientInst {
 } TkPathGradientInst;
 
 /*
- * Only one of color and gradientInstPtr must be non NULL! 
+ * Only one of color and gradientInstPtr must be non NULL!
  */
 typedef struct TkPathColor {
     XColor *color;	    /* Foreground color for filling. */
@@ -177,14 +176,14 @@ typedef struct TkPathColor {
 /*
  * Opaque platform dependent struct.
  */
- 
+
 typedef XID TkPathContext;
 
-/* 
+/*
  * Information used for parsing configuration options.
  * Mask bits for options changed.
  */
- 
+
 enum {
     PATH_STYLE_OPTION_FILL		    = (1L << 0),
     PATH_STYLE_OPTION_FILL_OFFSET	    = (1L << 1),
@@ -232,8 +231,8 @@ typedef struct Tk_PathStyle {
 				 * derived from this style name. */
 } Tk_PathStyle;
 
-/* 
- * This defines an instance of a style with specified name and hash table. 
+/*
+ * This defines an instance of a style with specified name and hash table.
  */
 typedef struct TkPathStyleInst {
     struct Tk_PathStyle *masterPtr;
@@ -249,7 +248,7 @@ typedef struct TkPathStyleInst {
 				 * associated with the same style name. */
 } TkPathStyleInst;
 
-// @@@ TODO: Much more to be added here! */
+/* @@@ TODO: Much more to be added here! */
 
 enum FontWeight {
     PATH_TEXT_WEIGHT_NORMAL,
@@ -272,64 +271,81 @@ typedef struct Tk_PathTextStyle {
 /*
  * Functions to create path atoms.
  */
- 
-PathAtom *  NewMoveToAtom(double x, double y);
-PathAtom *  NewLineToAtom(double x, double y);
-PathAtom *  NewArcAtom(double radX, double radY, 
-		double angle, char largeArcFlag, char sweepFlag, double x, double y);
-PathAtom *  NewQuadBezierAtom(double ctrlX, double ctrlY, double anchorX, double anchorY);
-PathAtom *  NewCurveToAtom(double ctrlX1, double ctrlY1, double ctrlX2, double ctrlY2, 
-		double anchorX, double anchorY);
-PathAtom *  NewRectAtom(double pointsPtr[]);
-PathAtom *  NewCloseAtom(double x, double y);
+
+MODULE_SCOPE PathAtom *NewMoveToAtom(double x, double y);
+MODULE_SCOPE PathAtom *NewLineToAtom(double x, double y);
+MODULE_SCOPE PathAtom *NewArcAtom(double radX, double radY,
+			double angle, char largeArcFlag, char sweepFlag,
+			double x, double y);
+MODULE_SCOPE PathAtom *NewQuadBezierAtom(double ctrlX, double ctrlY,
+			double anchorX, double anchorY);
+MODULE_SCOPE PathAtom *NewCurveToAtom(double ctrlX1, double ctrlY1,
+			double ctrlX2, double ctrlY2,
+			double anchorX, double anchorY);
+MODULE_SCOPE PathAtom *NewRectAtom(double pointsPtr[]);
+MODULE_SCOPE PathAtom *NewCloseAtom(double x, double y);
 
 /*
  * Functions that process lists and atoms.
  */
- 
-int	TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPtr, int *lenPtr);
-void	TkPathFreeAtoms(PathAtom *pathAtomPtr);
-int	TkPathNormalize(Tcl_Interp *interp, PathAtom *atomPtr, Tcl_Obj **listObjPtrPtr);
-int	TkPathMakePath(Drawable drawable, PathAtom *atomPtr, Tk_PathStyle *stylePtr);
+
+MODULE_SCOPE int    TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr,
+			PathAtom **atomPtrPtr, Tcl_Size *lenPtr);
+MODULE_SCOPE void   TkPathFreeAtoms(PathAtom *pathAtomPtr);
+MODULE_SCOPE int    TkPathNormalize(Tcl_Interp *interp, PathAtom *atomPtr,
+			Tcl_Obj **listObjPtrPtr);
+MODULE_SCOPE int    TkPathMakePath(Drawable drawable, PathAtom *atomPtr,
+			Tk_PathStyle *stylePtr);
 
 /*
  * Stroke, fill, clip etc.
  */
- 
-void	TkPathClipToPath(TkPathContext ctx, int fillRule);
-void	TkPathReleaseClipToPath(TkPathContext ctx);
-void	TkPathStroke(TkPathContext ctx, Tk_PathStyle *style);
-void	TkPathFill(TkPathContext ctx, Tk_PathStyle *style);
-void	TkPathFillAndStroke(TkPathContext ctx, Tk_PathStyle *style);
-int	TkPathGetCurrentPosition(TkPathContext ctx, PathPoint *ptPtr);
-int 	TkPathBoundingBox(TkPathContext ctx, PathRect *rPtr);
-void	TkPathPaintLinearGradient(TkPathContext ctx, PathRect *bbox, 
-		LinearGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *matrixPtr);
-void	TkPathPaintRadialGradient(TkPathContext ctx, PathRect *bbox, 
-		RadialGradientFill *fillPtr, int fillRule, double fillOpacity, TMatrix *mPtr);
-void    TkPathFree(TkPathContext ctx);
-int	TkPathDrawingDestroysPath(void);
-int	TkPathPixelAlign(void);
-void	TkPathPushTMatrix(TkPathContext ctx, TMatrix *mPtr);
-void	TkPathSaveState(TkPathContext ctx);
-void	TkPathRestoreState(TkPathContext ctx);
+
+MODULE_SCOPE void   TkPathClipToPath(TkPathContext ctx, int fillRule);
+MODULE_SCOPE void   TkPathReleaseClipToPath(TkPathContext ctx);
+MODULE_SCOPE void   TkPathStroke(TkPathContext ctx, Tk_PathStyle *style);
+MODULE_SCOPE void   TkPathFill(TkPathContext ctx, Tk_PathStyle *style);
+MODULE_SCOPE void   TkPathFillAndStroke(TkPathContext ctx, Tk_PathStyle *style);
+MODULE_SCOPE int    TkPathGetCurrentPosition(TkPathContext ctx,
+			PathPoint *ptPtr);
+MODULE_SCOPE int    TkPathBoundingBox(TkPathContext ctx, PathRect *rPtr);
+MODULE_SCOPE void   TkPathPaintLinearGradient(TkPathContext ctx,
+			PathRect *bbox, LinearGradientFill *fillPtr,
+			int fillRule, double fillOpacity, TMatrix *matrixPtr);
+MODULE_SCOPE void   TkPathPaintRadialGradient(TkPathContext ctx,
+			PathRect *bbox, RadialGradientFill *fillPtr,
+			int fillRule, double fillOpacity, TMatrix *mPtr);
+MODULE_SCOPE void   TkPathFree(TkPathContext ctx);
+MODULE_SCOPE int    TkPathDrawingDestroysPath(void);
+MODULE_SCOPE int    TkPathPixelAlign(void);
+MODULE_SCOPE void   TkPathPushTMatrix(TkPathContext ctx, TMatrix *mPtr);
+MODULE_SCOPE void   TkPathSaveState(TkPathContext ctx);
+MODULE_SCOPE void   TkPathRestoreState(TkPathContext ctx);
 
 /*
  * Utilities for creating and deleting Tk_PathStyles.
  */
- 
-void 	TkPathInitStyle(Tk_PathStyle *style);
-void 	TkPathDeleteStyle(Tk_PathStyle *style);
-int	TkPathConfigStyle(Tcl_Interp* interp, Tk_PathStyle *stylePtr, int objc, Tcl_Obj* CONST objv[]);
+
+MODULE_SCOPE void   TkPathInitStyle(Tk_PathStyle *style);
+MODULE_SCOPE void   TkPathDeleteStyle(Tk_PathStyle *style);
+MODULE_SCOPE int    TkPathConfigStyle(Tcl_Interp* interp,
+			Tk_PathStyle *stylePtr, int objc,
+			Tcl_Obj* const objv[]);
 
 /*
  * end block for C++
  */
-    
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif      // INCLUDED_TKPATH_H
-
-
+#endif      /* INCLUDED_TKPATH_H */
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

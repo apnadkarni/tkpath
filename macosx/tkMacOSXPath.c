@@ -5,7 +5,6 @@
  *
  * Copyright (c) 2005-2008  Mats Bengtsson
  *
- * $Id$
  *
  */
 
@@ -27,13 +26,13 @@
 #define TINT_INT_CALCULATION
 
 /* Seems to work for both Endians. */
-#define BlueFloatFromXColorPtr(xc)   ((float) ((((xc)->pixel >> 0)  & 0xFF)) / 255.0)
-#define GreenFloatFromXColorPtr(xc)  ((float) ((((xc)->pixel >> 8)  & 0xFF)) / 255.0)
-#define RedFloatFromXColorPtr(xc)    ((float) ((((xc)->pixel >> 16) & 0xFF)) / 255.0)
+#define BlueFloatFromXColorPtr(xc)   ((float) ((xc)->blue >> 8) / 255.0)
+#define GreenFloatFromXColorPtr(xc)  ((float) ((xc)->green >> 8) / 255.0)
+#define RedFloatFromXColorPtr(xc)    ((float) ((xc)->red >> 8) / 255.0)
 
-#define Blue255FromXColorPtr(xc)   ((((xc)->pixel >> 0)  & 0xFF))
-#define Green255FromXColorPtr(xc)  ((((xc)->pixel >> 8)  & 0xFF))
-#define Red255FromXColorPtr(xc)    ((((xc)->pixel >> 16) & 0xFF))
+#define Blue255FromXColorPtr(xc)   ((xc)->blue >> 8)
+#define Green255FromXColorPtr(xc)  ((xc)->green >> 8)
+#define Red255FromXColorPtr(xc)    ((xc)->red >> 8)
 
 
 #ifndef FloatToFixed
@@ -43,9 +42,6 @@
 extern int gAntiAlias;
 extern int gSurfaceCopyPremultiplyAlpha;
 extern int gDepixelize;
-
-/* For debugging. */
-extern Tcl_Interp *gInterp;
 
 const CGFloat kValidDomain[2] = {0, 1};
 const CGFloat kValidRange[8] = {0, 1, 0, 1, 0, 1, 0, 1};
@@ -309,9 +305,9 @@ PathSetUpCGContext(
 #endif
 
     /*
-     * Core Graphics defines the origin to be the bottom left 
+     * Core Graphics defines the origin to be the bottom left
      * corner of the CGContext and the positive y-axis points up.
-     * Move the origin and flip the y-axis for all subsequent 
+     * Move the origin and flip the y-axis for all subsequent
      * Core Graphics drawing operations.
      */
     CGContextSaveGState(dcPtr->c);
@@ -420,14 +416,14 @@ PathSetCGContextStyle(CGContextRef c, Tk_PathStyle *style)
 {
     Tk_PathDash *dashPtr;
     int fill = 0, stroke = 0;
-    
+
     /** Drawing attribute functions. **/
-    
-    /* Set the line width in the current graphics state to `width'. */    
+
+    /* Set the line width in the current graphics state to `width'. */
     CGContextSetLineWidth(c, style->strokeWidth);
-    
+
     /* Set the line cap in the current graphics state to `cap'. */
-    CGContextSetLineCap(c, 
+    CGContextSetLineCap(c,
             TableLookup(LineCapStyleLookupTable, 4, style->capStyle));
 
     /* Set the line join in the current graphics state to `join'. */
@@ -452,20 +448,20 @@ PathSetCGContextStyle(CGContextRef c, Tk_PathStyle *style)
      * alpha)'. */
     if (GetColorFromPathColor(style->fill) != NULL) {
         fill = 1;
-        CGContextSetRGBFillColor(c, 
-                RedFloatFromXColorPtr(style->fill->color), 
+        CGContextSetRGBFillColor(c,
+                RedFloatFromXColorPtr(style->fill->color),
                 GreenFloatFromXColorPtr(style->fill->color),
                 BlueFloatFromXColorPtr(style->fill->color),
                 style->fillOpacity);
     }
-    
+
     /* Set the current stroke colorspace in the context `c' to `DeviceRGB' and
     * set the components of the current stroke color to `(red, green, blue,
     * alpha)'. */
     if (style->strokeColor != NULL) {
         stroke = 1;
-        CGContextSetRGBStrokeColor(c, 
-                RedFloatFromXColorPtr(style->strokeColor), 
+        CGContextSetRGBStrokeColor(c,
+                RedFloatFromXColorPtr(style->strokeColor),
                 GreenFloatFromXColorPtr(style->strokeColor),
                 BlueFloatFromXColorPtr(style->strokeColor),
                 style->strokeOpacity);
@@ -475,7 +471,7 @@ PathSetCGContextStyle(CGContextRef c, Tk_PathStyle *style)
     } else if (stroke) {
         CGContextSetTextDrawingMode(c, kCGTextStroke);
     } else if (fill) {
-        CGContextSetTextDrawingMode(c, kCGTextFill);    
+        CGContextSetTextDrawingMode(c, kCGTextFill);
     }
 }
 
@@ -524,9 +520,9 @@ CreateLayoutForString(UniChar *buffer, CFIndex length, ATSUStyle atsuStyle, ATSU
 {
     ATSUTextLayout layout = NULL;
     OSStatus err = noErr;
-    
+
     *layoutPtr = NULL;
-    err = ATSUCreateTextLayoutWithTextPtr(buffer, 0, 
+    err = ATSUCreateTextLayoutWithTextPtr(buffer, 0,
             length, length, 1, (unsigned long *) &length, &atsuStyle, &layout);
     if (err == noErr) {
         *layoutPtr = layout;
@@ -535,18 +531,12 @@ CreateLayoutForString(UniChar *buffer, CFIndex length, ATSUStyle atsuStyle, ATSU
     return err;
 }
 
-/* === EB - 23-apr-2010: added function to register coordinate offsets; unneeded here (?) */
-void TkPathSetCoordOffsets(double dx, double dy)
-{
-}
-/* === */
-
-TkPathContext	
+TkPathContext
 TkPathInit(Tk_Window tkwin, Drawable d)
 {
     TkPathContext_ *context = (TkPathContext_ *) ckalloc(sizeof(TkPathContext_));
     bzero(context, sizeof(TkPathContext_));
-    
+
     PathSetUpCGContext(d, context);
     context->port = TkMacOSXGetDrawablePort(d);
     context->data = NULL;
@@ -555,7 +545,7 @@ TkPathInit(Tk_Window tkwin, Drawable d)
 }
 
 TkPathContext
-TkPathInitSurface(int width, int height)
+TkPathInitSurface(Display *display, int width, int height)
 {
     CGContextRef cgContext;
     TkPathContext_ *context = (TkPathContext_ *) ckalloc((unsigned) (sizeof(TkPathContext_)));
@@ -570,9 +560,9 @@ TkPathInitSurface(int width, int height)
     /* Round up to nearest multiple of 16 */
     bytesPerRow = (bytesPerRow + (16-1)) & ~(16-1);
     data = ckalloc(height*bytesPerRow);
-    
+
     /* Make it RGBA with 32 bit depth. */
-    cgContext = CGBitmapContextCreate(data, width, height, 8, bytesPerRow, 
+    cgContext = CGBitmapContextCreate(data, width, height, 8, bytesPerRow,
             GetTheColorSpaceRef(), kCGImageAlphaPremultipliedLast);
     if (cgContext == NULL) {
         ckfree((char *) context);
@@ -581,7 +571,7 @@ TkPathInitSurface(int width, int height)
     CGContextClearRect(cgContext, CGRectMake(0, 0, width, height));
     CGContextTranslateCTM(cgContext, 0, height);
     CGContextScaleCTM(cgContext, 1, -1);
-    context->c = cgContext; 
+    context->c = cgContext;
     context->port = NULL;
     context->data = data;
     context->clipRgn = NULL;
@@ -603,7 +593,7 @@ TkPathPushTMatrix(TkPathContext ctx, TMatrix *mPtr)
             (float) mPtr->a, (float) mPtr->b,
             (float) mPtr->c, (float) mPtr->d,
             (float) mPtr->tx, (float) mPtr->ty);
-    CGContextConcatCTM(context->c, transform);    
+    CGContextConcatCTM(context->c, transform);
 }
 
 void
@@ -679,7 +669,7 @@ TkPathQuadBezier(TkPathContext ctx, double ctrlX, double ctrlY, double x, double
 }
 
 void
-TkPathCurveTo(TkPathContext ctx, double ctrlX1, double ctrlY1, 
+TkPathCurveTo(TkPathContext ctx, double ctrlX1, double ctrlY1,
         double ctrlX2, double ctrlY2, double x, double y)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
@@ -692,7 +682,7 @@ TkPathCurveTo(TkPathContext ctx, double ctrlX1, double ctrlY1,
 
 void
 TkPathArcTo(TkPathContext ctx,
-        double rx, double ry, 
+        double rx, double ry,
         double phiDegrees, 	/* The rotation angle in degrees! */
         char largeArcFlag, char sweepFlag, double x, double y)
 {
@@ -744,7 +734,7 @@ CGInterpolationQuality convertInterpolationToCGInterpolation(int interpolation)
 }
 
 void
-TkPathImage(TkPathContext ctx, Tk_Image image, Tk_PhotoHandle photo, 
+TkPathImage(TkPathContext ctx, Tk_Image image, Tk_PhotoHandle photo,
         double x, double y, double width0, double height0, double fillOpacity,
         XColor *tintColor, double tintAmount, int interpolation, PathRect *srcRegion)
 {
@@ -775,9 +765,9 @@ TkPathImage(TkPathContext ctx, Tk_Image image, Tk_PhotoHandle photo,
 
 
     /*
-     * The offset array contains the offsets from the address of a pixel to 
-     * the addresses of the bytes containing the red, green, blue and alpha 
-     * (transparency) components.  These are normally 0, 1, 2 and 3. 
+     * The offset array contains the offsets from the address of a pixel to
+     * the addresses of the bytes containing the red, green, blue and alpha
+     * (transparency) components.  These are normally 0, 1, 2 and 3.
      * @@@ There are more cases to consider than these!
      */
     srcR = dstR = block.offset[0];
@@ -904,13 +894,13 @@ TkPathImage(TkPathContext ctx, Tk_Image image, Tk_PhotoHandle photo,
     }
     provider = CGDataProviderCreateWithData(NULL, ptr, size, NULL);
     colorspace = CGColorSpaceCreateDeviceRGB();
-    cgImage = CGImageCreate(block.width, block.height, 
+    cgImage = CGImageCreate(block.width, block.height,
             8, 						/* bitsPerComponent */
             block.pixelSize*8,	 	/* bitsPerPixel */
             block.pitch, 			/* bytesPerRow */
             colorspace,				/* colorspace */
             alphaInfo,				/* alphaInfo */
-            provider, NULL, 
+            provider, NULL,
             interpolation > 0 ? 1 : 0,  /* shouldInterpolate */
             kCGRenderingIntentDefault);
     CGDataProviderRelease(provider);
@@ -921,7 +911,7 @@ TkPathImage(TkPathContext ctx, Tk_Image image, Tk_PhotoHandle photo,
     if (height == 0.0) {
         height = (double) block.height;
     }
-    
+
     CGContextSaveGState(context->c);
 
     if (srcRegion != NULL) {
@@ -986,7 +976,7 @@ TkPathTextConfig(Tcl_Interp *interp, Tk_PathTextStyle *textStylePtr, char *utf8,
     PathATSUIRecord *recordPtr;
     ATSUStyle 		atsuStyle = NULL;
     ATSUTextLayout 	atsuLayout = NULL;
-    CFStringRef 	cf;    	    
+    CFStringRef 	cf;
     UniChar 		*buffer;
     CFRange 		range;
     CFIndex 		length;
@@ -1036,7 +1026,7 @@ TkPathTextConfig(Tcl_Interp *interp, Tk_PathTextStyle *textStylePtr, char *utf8,
     return TCL_OK;
 }
 
-void drawMultilineText(PathATSUIRecord *recordPtr)
+static void drawMultilineText(PathATSUIRecord *recordPtr)
 {
     int i;
 
@@ -1047,7 +1037,7 @@ void drawMultilineText(PathATSUIRecord *recordPtr)
 }
 
 void
-TkPathTextDraw(TkPathContext ctx, Tk_PathStyle *style, Tk_PathTextStyle *textStylePtr, 
+TkPathTextDraw(TkPathContext ctx, Tk_PathStyle *style, Tk_PathTextStyle *textStylePtr,
         double x, double y, int fillOverStroke, char *utf8, void *custom)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
@@ -1055,7 +1045,7 @@ TkPathTextDraw(TkPathContext ctx, Tk_PathStyle *style, Tk_PathTextStyle *textSty
     ByteCount iSize = sizeof(CGContextRef);
     ATSUAttributeTag iTag = kATSUCGContextTag;
     ATSUAttributeValuePtr iValuePtr = &(context->c);
-    
+
     ATSUSetLayoutControls(recordPtr->atsuLayout, 1, &iTag, &iSize, &iValuePtr);
     CGContextSaveGState(context->c);
     CGContextTranslateCTM(context->c, x, y);
@@ -1089,7 +1079,7 @@ TkPathTextFree(Tk_PathTextStyle *textStylePtr, void *custom)
 }
 
 PathRect
-TkPathTextMeasureBbox(Tk_PathTextStyle *textStylePtr, char *utf8, void *custom)
+TkPathTextMeasureBbox(Display *display, Tk_PathTextStyle *textStylePtr, char *utf8, void *custom)
 {
     PathATSUIRecord *recordPtr = (PathATSUIRecord *) custom;
     PathRect r,ri;
@@ -1157,13 +1147,13 @@ TkPathSurfaceToPhoto(Tcl_Interp *interp, TkPathContext ctx, Tk_PhotoHandle photo
     unsigned char *pixel;
     int width, height;
     int bytesPerRow;
-    
+
     width = CGBitmapContextGetWidth(c);
     height = CGBitmapContextGetHeight(c);
     data = CGBitmapContextGetData(c);
     bytesPerRow = CGBitmapContextGetBytesPerRow(c);
-    
-    Tk_PhotoGetImage(photo, &block);    
+
+    Tk_PhotoGetImage(photo, &block);
     pixel = (unsigned char *) ckalloc(height*bytesPerRow);
     if (gSurfaceCopyPremultiplyAlpha) {
         PathCopyBitsPremultipliedAlphaRGBA(data, pixel, width, height, bytesPerRow);
@@ -1183,7 +1173,7 @@ TkPathSurfaceToPhoto(Tcl_Interp *interp, TkPathContext ctx, Tk_PhotoHandle photo
     Tk_PhotoPutBlock(interp, photo, &block, 0, 0, width, height, TK_PHOTO_COMPOSITE_OVERLAY);
 }
 
-void		
+void
 TkPathClipToPath(TkPathContext ctx, int fillRule)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
@@ -1208,7 +1198,7 @@ TkPathReleaseClipToPath(TkPathContext ctx)
 
 void
 TkPathStroke(TkPathContext ctx, Tk_PathStyle *style)
-{       
+{
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     CGContextStrokePath(context->c);
 }
@@ -1224,7 +1214,7 @@ TkPathFill(TkPathContext ctx, Tk_PathStyle *style)
     }
 }
 
-void        
+void
 TkPathFillAndStroke(TkPathContext ctx, Tk_PathStyle *style)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
@@ -1257,13 +1247,13 @@ TkPathFree(TkPathContext ctx)
     ckfree((char *) ctx);
 }
 
-int		
+int
 TkPathDrawingDestroysPath(void)
 {
     return 1;
 }
 
-int		
+int
 TkPathPixelAlign(void)
 {
     return 0;
@@ -1273,25 +1263,25 @@ TkPathPixelAlign(void)
  *
  * 		Returns the current pen position in untransformed coordinates!
  */
- 
-int		
+
+int
 TkPathGetCurrentPosition(TkPathContext ctx, PathPoint *ptPtr)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     CGPoint cgpt;
-    
+
     cgpt = CGContextGetPathCurrentPoint(context->c);
     ptPtr->x = cgpt.x;
     ptPtr->y = cgpt.y;
     return TCL_OK;
 }
 
-int 
+int
 TkPathBoundingBox(TkPathContext ctx, PathRect *rPtr)
 {
     TkPathContext_ *context = (TkPathContext_ *) ctx;
     CGRect cgRect;
-    
+
     /* This one is not very useful since it includes the control points. */
     cgRect = CGContextGetPathBoundingBox(context->c);
     rPtr->x1 = cgRect.origin.x;
@@ -1334,24 +1324,24 @@ ShadeEvaluate(void *info, const CGFloat *in, CGFloat *out)
         stop1 = *(stopPtrPtr - 1);
         stop2 = *stopPtrPtr;
     }
-    /* Interpolate between the two stops. 
-     * "If two gradient stops have the same offset value, 
-     * then the latter gradient stop controls the color value at the 
+    /* Interpolate between the two stops.
+     * "If two gradient stops have the same offset value,
+     * then the latter gradient stop controls the color value at the
      * overlap point."
      */
     if (fabs(stop2->offset - stop1->offset) < 1e-6) {
         *out++ = RedFloatFromXColorPtr(stop2->color);
         *out++ = GreenFloatFromXColorPtr(stop2->color);
-        *out++ = BlueFloatFromXColorPtr(stop2->color); 
+        *out++ = BlueFloatFromXColorPtr(stop2->color);
         *out++ = stop2->opacity * fillOpacity;
     } else {
         f1 = (stop2->offset - par)/(stop2->offset - stop1->offset);
         f2 = (par - stop1->offset)/(stop2->offset - stop1->offset);
-        *out++ = f1 * RedFloatFromXColorPtr(stop1->color) + 
+        *out++ = f1 * RedFloatFromXColorPtr(stop1->color) +
                 f2 * RedFloatFromXColorPtr(stop2->color);
-        *out++ = f1 * GreenFloatFromXColorPtr(stop1->color) + 
+        *out++ = f1 * GreenFloatFromXColorPtr(stop1->color) +
                 f2 * GreenFloatFromXColorPtr(stop2->color);
-        *out++ = f1 * BlueFloatFromXColorPtr(stop1->color) + 
+        *out++ = f1 * BlueFloatFromXColorPtr(stop1->color) +
                 f2 * BlueFloatFromXColorPtr(stop2->color);
         *out++ = (f1 * stop1->opacity + f2 * stop2->opacity) * fillOpacity;
     }
@@ -1418,7 +1408,7 @@ TkPathPaintRadialGradient(TkPathContext ctx, PathRect *bbox, RadialGradientFill 
     CGFunctionCallbacks callbacks;
     RadialTransition    *tPtr = fillPtr->radialPtr;
     FillInfo            fillInfo;
-    
+
     fillInfo.fillOpacity = fillOpacity;
     fillInfo.stopArrPtr = fillPtr->stopArrPtr;
 
@@ -1452,4 +1442,12 @@ TkPathPaintRadialGradient(TkPathContext ctx, PathRect *bbox, RadialGradientFill 
         CGContextRestoreGState(context->c);
     }
 }
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */
 

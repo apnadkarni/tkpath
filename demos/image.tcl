@@ -15,12 +15,12 @@ $w create pimage $x $y -image $name
 $w create prect $x $y \
   [expr $x+[image width $name]] [expr $y+[image height $name]]
 
-set m [::tkp::transform rotate 0.5]
+set m [::tkp::matrix rotate 0.5]
 lset m {2 0} 220
 lset m {2 1} -120
 $w create pimage 100 100 -image $name -matrix $m
 
-set m [::tkp::transform scale 2 0.8]
+set m [::tkp::matrix scale 2 0.8]
 $w create pimage 10 300 -image $name -matrix $m
 
 $w create pimage 50 150 -image $name -width 320 -heigh 120 -fillopacity 0.3

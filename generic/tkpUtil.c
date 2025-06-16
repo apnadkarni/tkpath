@@ -10,7 +10,6 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #include "tkInt.h"
@@ -21,19 +20,18 @@
  * object, used for quickly finding a mapping in a TkStateMap.
  */
 
-/* === EB - 30-apr-2010: commented out the CONST that made build fail with tcl/tk 8.5 */
-/* === George Petasis - 7 July 2012: The missing CONST fails with Tk 8.6... */
-#if (TK_MAJOR_VERSION >= 8) &&  (TK_MINOR_VERSION >= 6)
-CONST
-#endif
-Tcl_ObjType tkStateKeyObjType = {
-    "statekey",			/* name */
-    NULL,			/* freeIntRepProc */
-    NULL,			/* dupIntRepProc */
-    NULL,			/* updateStringProc */
-    NULL			/* setFromAnyProc */
+const
+TkObjType tkStateKeyObjType = {
+    {
+        "statekey",		/* name */
+        NULL,			/* freeIntRepProc */
+        NULL,			/* dupIntRepProc */
+        NULL,			/* updateStringProc */
+        NULL,			/* setFromAnyProc */
+        TCL_OBJTYPE_V0
+    },
+    0
 };
-/* === */
 
 static int
 GetOffset(Tcl_Interp *interp, ClientData clientData,
@@ -165,7 +163,7 @@ static Tk_TSOffset *
 PathOffsetNew(Tcl_Interp *interp, ClientData clientData, Tk_Window tkwin, Tcl_Obj *offsetObj)
 {
     Tk_TSOffset *offsetPtr;
-    
+
     offsetPtr = (Tk_TSOffset *) ckalloc(sizeof(Tk_TSOffset));
     if (GetOffset(interp, clientData, offsetObj, tkwin, offsetPtr) != TCL_OK) {
 	ckfree((char *) offsetPtr);
@@ -185,7 +183,8 @@ PathOffsetNew(Tcl_Interp *interp, ClientData clientData, Tk_Window tkwin, Tcl_Ob
  *----------------------------------------------------------------------
  */
 
-int TkPathOffsetOptionSetProc(
+int
+TkPathOffsetOptionSetProc(
     ClientData clientData,
     Tcl_Interp *interp,	    /* Current interp; may be used for errors. */
     Tk_Window tkwin,	    /* Window for which option is being set. */
@@ -193,7 +192,7 @@ int TkPathOffsetOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	    /* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -203,7 +202,7 @@ int TkPathOffsetOptionSetProc(
                              * be stored, or NULL. */
     Tcl_Obj *valuePtr;
     Tk_TSOffset *newPtr = NULL;
-    
+
     valuePtr = *value;
     if (internalOffset >= 0) {
         internalPtr = recordPtr + internalOffset;
@@ -232,7 +231,7 @@ TkPathOffsetOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)		/* Offset within *recordPtr containing the
 				 * value. */
 {
     Tk_TSOffset *offsetPtr;
@@ -288,7 +287,7 @@ TkPathOffsetOptionGetProc(
 	p++;
     }
     sprintf(p, "%d,%d", offsetPtr->xoffset, offsetPtr->yoffset);
-    
+
 end:
     return Tcl_NewStringObj(buffer, -1);
 }
@@ -341,11 +340,15 @@ GetDoublePixels(
     Tk_Window tkwin,		/* Window whose screen determines conversion
 				 * from centimeters and other absolute
 				 * units. */
-    CONST char *string,		/* String describing a number of pixels. */
+    const char *string,		/* String describing a number of pixels. */
     double *doublePtr)		/* Place to store converted result. */
 {
     char *end;
     double d;
+    int widthM, widthS;
+#ifdef PLATFORM_SDL
+    double dW, dH;
+#endif
 
     d = strtod((char *) string, &end);
     if (end == string) {
@@ -357,27 +360,41 @@ GetDoublePixels(
     while ((*end != '\0') && isspace(UCHAR(*end))) {
 	end++;
     }
+#ifdef PLATFORM_SDL
+    dW = WidthOfScreen(Tk_Screen(tkwin));
+    dW /= WidthMMOfScreen(Tk_Screen(tkwin));
+    dH = HeightOfScreen(Tk_Screen(tkwin));
+    dH /= HeightMMOfScreen(Tk_Screen(tkwin));
+    if (dH > dW) {
+	widthS = HeightOfScreen(Tk_Screen(tkwin));
+	widthM = HeightMMOfScreen(Tk_Screen(tkwin));
+    } else
+#endif
+    {
+	widthS = WidthOfScreen(Tk_Screen(tkwin));
+	widthM = WidthMMOfScreen(Tk_Screen(tkwin));
+    }
     switch (*end) {
 	case 0:
 	    break;
 	case 'c':
-	    d *= 10*WidthOfScreen(Tk_Screen(tkwin));
-	    d /= WidthMMOfScreen(Tk_Screen(tkwin));
+	    d *= 10*widthS;
+	    d /= widthM;
 	    end++;
 	    break;
 	case 'i':
-	    d *= 25.4*WidthOfScreen(Tk_Screen(tkwin));
-	    d /= WidthMMOfScreen(Tk_Screen(tkwin));
+	    d *= 25.4*widthS;
+	    d /= widthM;
 	    end++;
 	    break;
 	case 'm':
-	    d *= WidthOfScreen(Tk_Screen(tkwin));
-	    d /= WidthMMOfScreen(Tk_Screen(tkwin));
+	    d *= widthS;
+	    d /= widthM;
 	    end++;
 	    break;
 	case 'p':
-	    d *= (25.4/72.0)*WidthOfScreen(Tk_Screen(tkwin));
-	    d /= WidthMMOfScreen(Tk_Screen(tkwin));
+	    d *= (25.4/72.0)*widthS;
+	    d /= widthM;
 	    end++;
 	    break;
 	default:
@@ -413,7 +430,8 @@ GetDoublePixels(
  *--------------------------------------------------------------
  */
 
-int Tk_PathPixelOptionSetProc(
+int
+Tk_PathPixelOptionSetProc(
     ClientData clientData,
     Tcl_Interp *interp,	    /* Current interp; may be used for errors. */
     Tk_Window tkwin,	    /* Window for which option is being set. */
@@ -421,7 +439,7 @@ int Tk_PathPixelOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	    /* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -432,7 +450,7 @@ int Tk_PathPixelOptionSetProc(
     Tcl_Obj *valuePtr;
     double newPixels;
     int result;
-    
+
     valuePtr = *value;
     if (internalOffset >= 0) {
         internalPtr = recordPtr + internalOffset;
@@ -449,8 +467,8 @@ int Tk_PathPixelOptionSetProc(
 	    if (result != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (newPixels < 0.0) {
-		Tcl_AppendStringsToObj(Tcl_GetObjResult(interp), 
-			"bad screen distance \"", value, "\"", NULL);
+		Tcl_AppendStringsToObj(Tcl_GetObjResult(interp),
+			"bad screen distance \"", Tcl_GetString(valuePtr), "\"", NULL);
 		return TCL_ERROR;
 	    }
         }
@@ -465,7 +483,7 @@ Tk_PathPixelOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)		/* Offset within *recordPtr containing the
 				 * value. */
 {
     return Tcl_NewDoubleObj(*((double *) (recordPtr + internalOffset)));
@@ -481,3 +499,34 @@ Tk_PathPixelOptionRestoreProc(
     *(double **)internalPtr = *(double **)oldInternalPtr;
 }
 
+int
+TkpWrongNumberOfCoordinates(
+    Tcl_Interp *interp,
+    Tcl_Size numExpected1,
+    Tcl_Size numExpected2,
+    Tcl_Size numPassed)
+{
+    if (interp) {
+        Tcl_Obj *objPtr;
+        if (numExpected1 == numExpected2) {
+            objPtr = Tcl_ObjPrintf("wrong # coordinates: expected %"
+                         TCL_SIZE_MODIFIER "d, got %" TCL_SIZE_MODIFIER "d",
+                         numExpected1, numPassed);
+        } else {
+            objPtr = Tcl_ObjPrintf("wrong # coordinates: expected %"
+                         TCL_SIZE_MODIFIER "d or %" TCL_SIZE_MODIFIER "d, got %"
+                         TCL_SIZE_MODIFIER "d",
+                         numExpected1, numExpected2, numPassed);
+        }
+        Tcl_SetObjResult(interp, objPtr);
+    }
+    return TCL_ERROR; /* Always, so caller can just return function value */
+}
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

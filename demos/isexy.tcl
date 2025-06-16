@@ -113,7 +113,7 @@ $w move c2 [expr {$width + 2*10}] 60
 
 drawhammer $w hammer
 $w move hammer 80 102
-$w itemconfig hammer -matrix [::tkp::transform rotate -0.7 80 102]
+$w itemconfig hammer -matrix [::tkp::matrix rotate -0.7 80 102]
 
 drawbar $w bar
 

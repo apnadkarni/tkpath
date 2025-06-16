@@ -9,7 +9,6 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #include <stdio.h>
@@ -48,47 +47,45 @@ typedef struct ImageItem  {
  * default strings, be sure to change the corresponding default values in
  * CreateLine.
  */
- 
+
 #define PATH_DEF_STATE "normal"
 
 /* These MUST be kept in sync with enums! X.h */
 
-static char *stateStrings[] = {
+static const char *stateStrings[] = {
     "active", "disabled", "normal", "hidden", NULL
 };
 
 static Tk_ObjCustomOption tagsCO = {
-    "tags",			
+    "tags",
     Tk_PathCanvasTagsOptionSetProc,
     Tk_PathCanvasTagsOptionGetProc,
     Tk_PathCanvasTagsOptionRestoreProc,
-    Tk_PathCanvasTagsOptionFreeProc,	
-    (ClientData) NULL			
+    Tk_PathCanvasTagsOptionFreeProc,
+    (ClientData) NULL
 };
 
 static Tk_OptionSpec optionSpecs[] = {
     {TK_OPTION_STRING, "-activeimage", NULL, NULL,
-	NULL, -1, Tk_Offset(ImageItem, activeImageString), 
+	NULL, -1, offsetof(ImageItem, activeImageString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_ANCHOR, "-anchor", NULL, NULL,
-	"center", -1, Tk_Offset(ImageItem, anchor), 0, 0, 0},
+	"center", -1, offsetof(ImageItem, anchor), 0, 0, 0},
     {TK_OPTION_STRING, "-disabledimage", NULL, NULL,
-	NULL, -1, Tk_Offset(ImageItem, disabledImageString), 
+	NULL, -1, offsetof(ImageItem, disabledImageString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-image", NULL, NULL,
-	NULL, -1, Tk_Offset(ImageItem, imageString), 
+	NULL, -1, offsetof(ImageItem, imageString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING_TABLE, "-state", NULL, NULL,
-        PATH_DEF_STATE, -1, Tk_Offset(Tk_PathItem, state),
-        0, (ClientData) stateStrings, 0},		
+        PATH_DEF_STATE, -1, offsetof(Tk_PathItem, state),
+        0, (ClientData) stateStrings, 0},
     {TK_OPTION_CUSTOM, "-tags", NULL, NULL,
-	NULL, -1, Tk_Offset(Tk_PathItem, pathTagsPtr),
+	NULL, -1, offsetof(Tk_PathItem, pathTagsPtr),
 	TK_OPTION_NULL_OK, (ClientData) &tagsCO, 0},
-    {TK_OPTION_END, NULL, NULL, NULL,           
+    {TK_OPTION_END, NULL, NULL, NULL,
 	NULL, 0, -1, 0, (ClientData) NULL, 0}
 };
-
-static Tk_OptionTable optionTable = NULL;
 
 /*
  * Prototypes for functions defined in this file:
@@ -98,31 +95,40 @@ static void		ImageChangedProc(ClientData clientData,
 			    int x, int y, int width, int height, int imgWidth,
 			    int imgHeight);
 static int		ImageCoords(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int argc,
-			    Tcl_Obj *CONST argv[]);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int		ImageToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
+static int		ImageToPdf(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double		ImageToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *coordPtr);
+#ifndef TKP_NO_POSTSCRIPT
 static int		ImageToPostscript(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
-static void		ComputeImageBbox(Tk_PathCanvas canvas, ImageItem *imgPtr);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int prepass);
+#endif
+static void		ComputeImageBbox(Tk_PathCanvas canvas,
+			    ImageItem *imgPtr);
 static int		ConfigureImage(Tcl_Interp *interp,
-			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int argc,
-			    Tcl_Obj *CONST argv[], int flags);
+			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreateImage(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int argc, Tcl_Obj *CONST argv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeleteImage(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayImage(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, Display *display, Drawable dst,
+			    Tk_PathItem *itemPtr, Display *display,
+			    Drawable dst,
 			    int x, int y, int width, int height);
-static void		ScaleImage(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, double originX, double originY,
+static void		ScaleImage(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+			    int compensate, double originX, double originY,
 			    double scaleX, double scaleY);
 static void		TranslateImage(Tk_PathCanvas canvas,
-			    Tk_PathItem *itemPtr, double deltaX, double deltaY);
+			    Tk_PathItem *itemPtr, int compensate,
+			    double deltaX, double deltaY);
 
 /*
  * The structures below defines the image item type in terms of functions that
@@ -142,7 +148,10 @@ Tk_PathItemType tkImageType = {
     NULL,			/* bboxProc */
     ImageToPoint,		/* pointProc */
     ImageToArea,		/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     ImageToPostscript,		/* postscriptProc */
+#endif
+    ImageToPdf,			/* pdfProc */
     ScaleImage,			/* scaleProc */
     TranslateImage,		/* translateProc */
     NULL,			/* indexProc */
@@ -178,11 +187,12 @@ CreateImage(
     Tk_PathCanvas canvas,		/* Canvas to hold new item. */
     Tk_PathItem *itemPtr,		/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
-    Tcl_Obj *CONST objv[])	/* Arguments describing rectangle. */
+    Tcl_Size objc,			/* Number of arguments in objv. */
+    Tcl_Obj *const objv[])	/* Arguments describing rectangle. */
 {
     ImageItem *imgPtr = (ImageItem *) itemPtr;
     int i;
+    Tk_OptionTable optionTable;
 
     if (objc == 0) {
 	Tcl_Panic("canvas did not pass any coords\n");
@@ -201,11 +211,9 @@ CreateImage(
     imgPtr->activeImage = NULL;
     imgPtr->disabledImage = NULL;
 
-    if (optionTable == NULL) {
-	optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) imgPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) imgPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -259,8 +267,8 @@ ImageCoords(
     Tk_PathCanvas canvas,		/* Canvas containing item. */
     Tk_PathItem *itemPtr,		/* Item whose coordinates are to be read or
 				 * modified. */
-    int objc,			/* Number of coordinates supplied in objv. */
-    Tcl_Obj *CONST objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
+    Tcl_Size objc,			/* Number of coordinates supplied in objv. */
+    Tcl_Obj *const objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
 {
     ImageItem *imgPtr = (ImageItem *) itemPtr;
 
@@ -278,11 +286,7 @@ ImageCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 2) {
-		char buf[64];
-
-		sprintf(buf, "wrong # coordinates: expected 2, got %d", objc);
-		Tcl_SetResult(interp, buf, TCL_VOLATILE);
-		return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 2, 2, objc);
 	    }
 	}
 	if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &imgPtr->x) != TCL_OK)
@@ -292,11 +296,7 @@ ImageCoords(
 	}
 	ComputeImageBbox(canvas, imgPtr);
     } else {
-	char buf[64];
-
-	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %d", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
-	return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
     }
     return TCL_OK;
 }
@@ -324,8 +324,8 @@ ConfigureImage(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Image item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
-    Tcl_Obj *CONST objv[],	/* Arguments describing things to configure. */
+    Tcl_Size objc,		/* Number of elements in objv.  */
+    Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
     ImageItem *imgPtr = (ImageItem *) itemPtr;
@@ -336,7 +336,7 @@ ConfigureImage(
     int error;
 
     tkwin = Tk_PathCanvasTkwin(canvas);
-    
+
     /*
      * The following loop is potentially executed twice. During the first pass
      * configuration options get set to their new values. If there is an error
@@ -350,8 +350,8 @@ ConfigureImage(
 	     * First pass: set options to new values.
 	     */
 
-	    if (Tk_SetOptions(interp, (char *) imgPtr, 
-		    optionTable, objc, objv, tkwin, 
+	    if (Tk_SetOptions(interp, (char *) imgPtr,
+		    itemPtr->optionTable, objc, objv, tkwin,
 		    &savedOptions, NULL) != TCL_OK) {
 		continue;
 	    }
@@ -364,20 +364,20 @@ ConfigureImage(
 	    Tcl_IncrRefCount(errorResult);
 	    Tk_RestoreSavedOptions(&savedOptions);
 	}
-	
+
 	/*
 	 * Create the image. Save the old image around and don't free it until
 	 * after the new one is allocated. This keeps the reference count from
 	 * going to zero so the image doesn't have to be recreated if it hasn't
 	 * changed.
 	 */
-	
+
 	if (imgPtr->activeImageString != NULL) {
 	    itemPtr->redraw_flags |= TK_ITEM_STATE_DEPENDANT;
 	} else {
 	    itemPtr->redraw_flags &= ~TK_ITEM_STATE_DEPENDANT;
 	}
-	
+
 	/* image */
 	if (imgPtr->imageString != NULL) {
 	    image = Tk_GetImage(interp, tkwin, imgPtr->imageString,
@@ -392,7 +392,7 @@ ConfigureImage(
 	    Tk_FreeImage(imgPtr->image);
 	}
 	imgPtr->image = image;
-	
+
 	/* active image */
 	if (imgPtr->activeImageString != NULL) {
 	    image = Tk_GetImage(interp, tkwin, imgPtr->activeImageString,
@@ -407,7 +407,7 @@ ConfigureImage(
 	    Tk_FreeImage(imgPtr->activeImage);
 	}
 	imgPtr->activeImage = image;
-	
+
 	/* disabled image */
 	if (imgPtr->disabledImageString != NULL) {
 	    image = Tk_GetImage(interp, tkwin, imgPtr->disabledImageString,
@@ -471,7 +471,8 @@ DeleteImage(
     if (imgPtr->disabledImage != NULL) {
 	Tk_FreeImage(imgPtr->disabledImage);
     }
-    Tk_FreeConfigOptions((char *) imgPtr, optionTable, Tk_PathCanvasTkwin(canvas));
+    Tk_FreeConfigOptions((char *) imgPtr, itemPtr->optionTable,
+			 Tk_PathCanvasTkwin(canvas));
 }
 
 /*
@@ -503,7 +504,7 @@ ComputeImageBbox(
     Tk_Image image;
     Tk_PathState state = imgPtr->header.state;
 
-    if(state == TK_PATHSTATE_NULL) {
+    if (state == TK_PATHSTATE_NULL) {
 	state = TkPathCanvasState(canvas);
     }
     image = imgPtr->image;
@@ -520,7 +521,7 @@ ComputeImageBbox(
     x = (int) (imgPtr->x + ((imgPtr->x >= 0) ? 0.5 : - 0.5));
     y = (int) (imgPtr->y + ((imgPtr->y >= 0) ? 0.5 : - 0.5));
 
-    if ((state == TK_PATHSTATE_HIDDEN) || (image == None)) {
+    if ((state == TK_PATHSTATE_HIDDEN) || (image == NULL)) {
 	imgPtr->header.x1 = imgPtr->header.x2 = x;
 	imgPtr->header.y1 = imgPtr->header.y2 = y;
 	return;
@@ -561,6 +562,8 @@ ComputeImageBbox(
     case TK_ANCHOR_CENTER:
 	x -= width/2;
 	y -= height/2;
+	break;
+    case TK_ANCHOR_NULL:
 	break;
     }
 
@@ -739,6 +742,40 @@ ImageToArea(
 /*
  *--------------------------------------------------------------
  *
+ * ImageToPdf --
+ *
+ *	This function is called to generate Pdf for image items.
+ *
+ * Results:
+ *	The return value is a standard Tcl result. If an error occurs in
+ *	generating Pdf then an error message is left in interp->result,
+ *	replacing whatever used to be there. If no error occurs, then
+ *	Pdf for the item is appended to the result.
+ *
+ * Side effects:
+ *	None.
+ *
+ *--------------------------------------------------------------
+ */
+
+static int
+ImageToPdf(
+    Tcl_Interp *interp,		/* Leave Pdf or error message here. */
+    Tk_PathCanvas canvas,	/* Information about overall canvas. */
+    Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
+    Tcl_Size objc,              /* Number of arguments. */
+    Tcl_Obj *const objv[],      /* Argument list. */
+    int prepass)		/* 1 means this is a prepass to collect font
+				 * information; 0 means final Pdf is
+				 * being created.*/
+{
+    return TCL_OK;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
+/*
+ *--------------------------------------------------------------
+ *
  * ImageToPostscript --
  *
  *	This function is called to generate Postscript for image items.
@@ -773,7 +810,7 @@ ImageToPostscript(
     Tk_Image image;
     Tk_PathState state = itemPtr->state;
 
-    if(state == TK_PATHSTATE_NULL) {
+    if (state == TK_PATHSTATE_NULL) {
 	state = TkPathCanvasState(canvas);
     }
 
@@ -814,6 +851,7 @@ ImageToPostscript(
     case TK_ANCHOR_SW:						break;
     case TK_ANCHOR_W:			   y -= height/2.0;	break;
     case TK_ANCHOR_CENTER: x -= width/2.0; y -= height/2.0;	break;
+    case TK_ANCHOR_NULL:                                        break;
     }
 
     if (!prepass) {
@@ -824,6 +862,7 @@ ImageToPostscript(
     return Tk_PostscriptImage(image, interp, canvasWin,
 	    ((TkPathCanvas *) canvas)->psInfo, 0, 0, width, height, prepass);
 }
+#endif
 
 /*
  *--------------------------------------------------------------
@@ -848,6 +887,7 @@ static void
 ScaleImage(
     Tk_PathCanvas canvas,		/* Canvas containing rectangle. */
     Tk_PathItem *itemPtr,		/* Rectangle to be scaled. */
+    int compensate,			/* Unused. */
     double originX, double originY,
 				/* Origin about which to scale rect. */
     double scaleX,		/* Amount to scale in X direction. */
@@ -881,6 +921,7 @@ static void
 TranslateImage(
     Tk_PathCanvas canvas,		/* Canvas containing item. */
     Tk_PathItem *itemPtr,		/* Item that is being moved. */
+    int compensate,			/* Unused. */
     double deltaX, double deltaY)
 				/* Amount by which item is to be moved. */
 {

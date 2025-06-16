@@ -13,12 +13,13 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #include "tkInt.h"
 #include "tkIntPath.h"
 #include "tkpCanvas.h"
+
+#ifndef TKP_NO_POSTSCRIPT
 
 /*
  * See tkCanvas.h for key data structures used to implement canvases.
@@ -94,58 +95,56 @@ typedef struct TkPostscriptInfo {
 
 static Tk_OptionSpec optionSpecs[] = {
     {TK_OPTION_STRING, "-colormap", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, colorVar),
+	NULL, -1, offsetof(TkPostscriptInfo, colorVar),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-colormode", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, colorMode),
+	NULL, -1, offsetof(TkPostscriptInfo, colorMode),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-file", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, fileName),
+	NULL, -1, offsetof(TkPostscriptInfo, fileName),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-channel", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, channelName),
+	NULL, -1, offsetof(TkPostscriptInfo, channelName),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-fontmap", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, fontVar),
+	NULL, -1, offsetof(TkPostscriptInfo, fontVar),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_PIXELS, "-height", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, height),
+	NULL, -1, offsetof(TkPostscriptInfo, height),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_ANCHOR, "-pageanchor", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, pageAnchor),
+	NULL, -1, offsetof(TkPostscriptInfo, pageAnchor),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-pageheight", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, pageHeightString),
+	NULL, -1, offsetof(TkPostscriptInfo, pageHeightString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-pagewidth", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, pageWidthString),
+	NULL, -1, offsetof(TkPostscriptInfo, pageWidthString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-pagex", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, pageXString),
+	NULL, -1, offsetof(TkPostscriptInfo, pageXString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_STRING, "-pagey", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, pageYString),
+	NULL, -1, offsetof(TkPostscriptInfo, pageYString),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_BOOLEAN, "-prolog", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, prolog),
+	NULL, -1, offsetof(TkPostscriptInfo, prolog),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_BOOLEAN, "-rotate", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, rotate),
+	NULL, -1, offsetof(TkPostscriptInfo, rotate),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_PIXELS, "-width", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, width),
+	NULL, -1, offsetof(TkPostscriptInfo, width),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_PIXELS, "-x", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, x),
+	NULL, -1, offsetof(TkPostscriptInfo, x),
 	TK_OPTION_NULL_OK, 0, 0},
     {TK_OPTION_PIXELS, "-y", NULL, NULL,
-	NULL, -1, Tk_Offset(TkPostscriptInfo, y),
+	NULL, -1, offsetof(TkPostscriptInfo, y),
 	TK_OPTION_NULL_OK, 0, 0},
-    {TK_OPTION_END, NULL, NULL, NULL,           
+    {TK_OPTION_END, NULL, NULL, NULL,
 	NULL, 0, -1, 0, (ClientData) NULL, 0}
 };
-
-static Tk_OptionTable optionTable = NULL;
 
 /*
  * Forward declarations for functions defined later in this file:
@@ -188,7 +187,7 @@ TkCanvPostscriptCmd(
     Tk_PathItem *itemPtr;
 #define STRING_LENGTH 400
     char string[STRING_LENGTH+1];
-    CONST char *p;
+    const char *p;
     time_t now;
     size_t length;
     Tk_Window tkwin = canvasPtr->tkwin;
@@ -201,6 +200,7 @@ TkCanvPostscriptCmd(
 				 * the positioning point on the page (reflects
 				 * anchor position). Initial values needed
 				 * only to stop compiler warnings. */
+    Tk_OptionTable optionTable;
 
     /*
      * Initialize the data structure describing Postscript generation, then
@@ -235,15 +235,13 @@ TkCanvPostscriptCmd(
     psInfo.chan = NULL;
     psInfo.prepass = 0;
     psInfo.prolog = 1;
-    
+
     Tcl_InitHashTable(&psInfo.fontTable, TCL_STRING_KEYS);
-    if (optionTable == NULL) {
-	optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     if (Tk_InitOptions(interp, (char *) &psInfo, optionTable, tkwin) != TCL_OK) {
         goto cleanup;
     }
-    if (Tk_SetOptions(interp, (char *) &psInfo, optionTable, 
+    if (Tk_SetOptions(interp, (char *) &psInfo, optionTable,
 	    objc-2, objv+2, tkwin, NULL, NULL) != TCL_OK) {
         goto cleanup;
     }
@@ -282,8 +280,18 @@ TkCanvPostscriptCmd(
 	}
 	psInfo.scale /= psInfo.height;
     } else {
+#ifdef PLATFORM_SDL
+	double scW, scH;
+
+	scW = (72.0/25.4)*WidthMMOfScreen(Tk_Screen(tkwin));
+	scW /= WidthOfScreen(Tk_Screen(tkwin));
+	scH = (72.0/25.4)*HeightMMOfScreen(Tk_Screen(tkwin));
+	scH /= HeightOfScreen(Tk_Screen(tkwin));
+	psInfo.scale = (scH > scW) ? scW : scH;
+#else
 	psInfo.scale = (72.0/25.4)*WidthMMOfScreen(Tk_Screen(tkwin));
 	psInfo.scale /= WidthOfScreen(Tk_Screen(tkwin));
+#endif
     }
     switch (psInfo.pageAnchor) {
     case TK_ANCHOR_NW:
@@ -301,6 +309,8 @@ TkCanvPostscriptCmd(
     case TK_ANCHOR_SE:
 	deltaX = -psInfo.width;
 	break;
+    case TK_ANCHOR_NULL:
+	break;
     }
     switch (psInfo.pageAnchor) {
     case TK_ANCHOR_NW:
@@ -317,6 +327,8 @@ TkCanvPostscriptCmd(
     case TK_ANCHOR_S:
     case TK_ANCHOR_SE:
 	deltaY = 0;
+	break;
+    case TK_ANCHOR_NULL:
 	break;
     }
 
@@ -810,7 +822,6 @@ TkPathPostscriptImage(
 #if defined(__cplusplus) || defined(c_plusplus)
     if (visual->c_class == DirectColor || visual->c_class == TrueColor) {
 #else
-	int class;		/* class of screen (monochrome, etc.) */
     if (visual->class == DirectColor || visual->class == TrueColor) {
 #endif
 	cdata.separated = 1;
@@ -1005,8 +1016,14 @@ TkPathPostscriptImage(
     ckfree((char *) cdata.colors);
     return TCL_OK;
 }
+
+#endif /* TKP_NO_POSTSCRIPT */
+
 
-
-
-
-
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

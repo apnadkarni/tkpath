@@ -8,6 +8,10 @@ pack [tkp::canvas $w -width 960 -height 960 -bg "#c6ceef" -highlightthickness 0]
 
 namespace eval ::imageanchor {
     variable w $::w
+    variable x0
+    variable y0
+    variable dx
+    variable dy
 
     set dir [file dirname [info script]]
     set imageFile [file join $dir trees.gif]
@@ -44,7 +48,7 @@ namespace eval ::imageanchor {
                 set a [lindex $anchors $i]
                 set x [expr $x0 + $i%3 * $dx]
                 set y [expr $y0 + $i/3 * $dy]
-                set m [::tkp::transform rotate $phi $x $y]
+                set m [::tkp::matrix rotate $phi $x $y]
                 $w itemconfig $a -m $m
             }
         }

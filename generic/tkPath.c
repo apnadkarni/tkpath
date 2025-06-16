@@ -7,22 +7,75 @@
  *
  * Copyright (c) 2005-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include "tkIntPath.h"
+#include "tkCanvArrow.h"
+#include "tkCanvPathUtil.h"
 
-/* For debugging. */
-extern Tcl_Interp *gInterp;
+MODULE_SCOPE int gDepixelize;
 
 static const char kPathSyntaxError[] = "syntax error in path definition";
 
+/*
+ * A placeholder for the context we are working in.
+ * The current and lastMove are always original untransformed coordinates.
+ */
 
-int 	
+typedef struct TkPointsContext_ {
+    double 		current[2];
+    double 		lastMove[2];
+    int			widthCode;
+} TkPointsContext_;
+
+/*---------------------------------------------------------------------------*/
+
+static void	PathPdfMoveTo(Tcl_Obj *list,TkPointsContext_ *context,
+			double x, double y);
+static void	PathPdfLineTo(Tcl_Obj *list, TkPointsContext_ *context,
+			double x, double y);
+static void	PathPdfCurveTo(Tcl_Obj *list, TkPointsContext_ *context,
+			double x1, double y1, double x2, double y2,
+			double x, double y);
+static void	PathPdfArcTo(Tcl_Obj *list, TkPointsContext_ *context,
+			double rx, double ry, double phiDegrees,
+			char largeArcFlag, char sweepFlag, double x, double y);
+static void	PathPdfQuadBezier(Tcl_Obj *list, TkPointsContext_ *context,
+			double ctrlX, double ctrlY, double x, double y);
+static void	PathPdfArcToUsingBezier(Tcl_Obj *list,
+			TkPointsContext_ *context,
+			double rx, double ry, double phiDegrees,
+			char largeArcFlag, char sweepFlag,
+			double x2, double y2);
+static void	PathPdfClosePath(Tcl_Obj *list, TkPointsContext_ *context);
+static void	PathPdfOval(Tcl_Obj *list, TkPointsContext_ *context,
+			double cx, double cy, double rx, double ry);
+static void	PathPdfRect(Tcl_Obj *list, TkPointsContext_ *context,
+			double x, double y, double width, double height);
+static int	PathPdfGradFuncType2(Tcl_Interp *interp, Tcl_Obj *mkobj,
+			int isAlpha, GradientStop *stop0, GradientStop *stop1);
+static int	PathPdfGradSoftMask(Tcl_Interp *interp, Tcl_Obj *mkobj,
+			PathRect *bbox, const char *gradName, long gradId,
+			TMatrix *tmPtr);
+static int	PathPdfGradient(Tcl_Interp *interp, int isAlpha, Tcl_Obj *mkobj,
+			Tcl_Obj *mkgrad, PathRect *bbox,
+			TkPathGradientMaster *gradientPtr, char **gradName,
+			long *gradId, TMatrix *tmPtr);
+static int	PathPdfLinearGradient(Tcl_Interp *interp, int isAlpha,
+			Tcl_Obj *mkobj,	Tcl_Obj *mkgrad, PathRect *bbox,
+			LinearGradientFill *fillPtr, TMatrix *mPtr);
+static int	PathPdfRadialGradient(Tcl_Interp *interp, int isAlpha,
+			Tcl_Obj *mkobj,	Tcl_Obj *mkgrad, PathRect *bbox,
+			RadialGradientFill *fillPtr, TMatrix *mPtr,
+			TMatrix *tmPtr);
+
+/*---------------------------------------------------------------------------*/
+
+MODULE_SCOPE int
 PixelAlignObjCmd(ClientData clientData, Tcl_Interp* interp,
-        int objc, Tcl_Obj* CONST objv[])
+        int objc, Tcl_Obj* const objv[])
 {
-    Tcl_SetObjResult(interp, Tcl_NewBooleanObj(TkPathPixelAlign()));    
+    Tcl_SetObjResult(interp, Tcl_NewBooleanObj(TkPathPixelAlign()));
     return TCL_OK;
 }
 
@@ -44,12 +97,13 @@ PixelAlignObjCmd(ClientData clientData, Tcl_Interp* interp,
  */
 
 static int
-GetPathInstruction(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int index, char *c) 
+GetPathInstruction(Tcl_Interp *interp, Tcl_Obj *const objv[], int index,
+		   char *c)
 {
-    int len;
+    Tcl_Size len;
     int result;
     char *str;
-    
+
     *c = '\0';
     str = Tcl_GetStringFromObj(objv[index], &len);
     if (isalpha(str[0])) {
@@ -67,7 +121,8 @@ GetPathInstruction(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int index, char *c
                     *c = str[0];
                     break;
                 default:
-                    Tcl_SetObjResult(interp, Tcl_NewStringObj(kPathSyntaxError, -1));
+                    Tcl_SetObjResult(interp,
+				     Tcl_NewStringObj(kPathSyntaxError, -1));
                     result = PATH_NEXT_ERROR;
                     break;
             }
@@ -98,7 +153,8 @@ GetPathInstruction(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int index, char *c
  */
 
 static int
-GetPathDouble(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr, double *zPtr) 
+GetPathDouble(Tcl_Interp *interp, Tcl_Obj *const objv[], int len,
+	      int *indexPtr, double *zPtr)
 {
     int result;
 
@@ -115,7 +171,8 @@ GetPathDouble(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr,
 }
 
 static int
-GetPathBoolean(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr, char *boolPtr) 
+GetPathBoolean(Tcl_Interp *interp, Tcl_Obj *const objv[], int len,
+	       int *indexPtr, char *boolPtr)
 {
     int result;
     int boolean;
@@ -134,12 +191,12 @@ GetPathBoolean(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr
 }
 
 static int
-GetPathPoint(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr, 
-        double *xPtr, double *yPtr)
+GetPathPoint(Tcl_Interp *interp, Tcl_Obj *const objv[], int len,
+	     int *indexPtr, double *xPtr, double *yPtr)
 {
     int result = TCL_OK;
     int indIn = *indexPtr;
-    
+
     if (*indexPtr > len - 2) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(kPathSyntaxError, -1));
         result = TCL_ERROR;
@@ -154,8 +211,9 @@ GetPathPoint(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr,
 }
 
 static int
-GetPathTwoPoints(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr, 
-        double *x1Ptr, double *y1Ptr, double *x2Ptr, double *y2Ptr)
+GetPathTwoPoints(Tcl_Interp *interp, Tcl_Obj *const objv[], int len,
+		 int *indexPtr, double *x1Ptr, double *y1Ptr,
+		 double *x2Ptr, double *y2Ptr)
 {
     int result;
     int indIn = *indexPtr;
@@ -171,9 +229,9 @@ GetPathTwoPoints(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexP
 }
 
 static int
-GetPathThreePoints(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr, 
-        double *x1Ptr, double *y1Ptr, double *x2Ptr, double *y2Ptr,
-        double *x3Ptr, double *y3Ptr)
+GetPathThreePoints(Tcl_Interp *interp, Tcl_Obj *const objv[], int len,
+		   int *indexPtr, double *x1Ptr, double *y1Ptr,
+		   double *x2Ptr, double *y2Ptr, double *x3Ptr, double *y3Ptr)
 {
     int result;
     int indIn = *indexPtr;
@@ -183,7 +241,8 @@ GetPathThreePoints(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *inde
         if (GetPathPoint(interp, objv, len, indexPtr, x2Ptr, y2Ptr) != TCL_OK) {
             *indexPtr = indIn;
             result = TCL_ERROR;
-        } else if (GetPathPoint(interp, objv, len, indexPtr, x3Ptr, y3Ptr) != TCL_OK) {
+        } else if (GetPathPoint(interp, objv, len, indexPtr,
+				x3Ptr, y3Ptr) != TCL_OK) {
             *indexPtr = indIn;
             result = TCL_ERROR;
         }
@@ -192,9 +251,10 @@ GetPathThreePoints(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *inde
 }
 
 static int
-GetPathArcParameters(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *indexPtr,
-        double *radXPtr, double *radYPtr, double *anglePtr, 
-        char *largeArcFlagPtr, char *sweepFlagPtr, 
+GetPathArcParameters(Tcl_Interp *interp, Tcl_Obj *const objv[], int len,
+		     int *indexPtr,
+        double *radXPtr, double *radYPtr, double *anglePtr,
+        char *largeArcFlagPtr, char *sweepFlagPtr,
         double *xPtr, double *yPtr)
 {
     int result;
@@ -205,16 +265,19 @@ GetPathArcParameters(Tcl_Interp *interp, Tcl_Obj *CONST objv[], int len, int *in
         if (GetPathDouble(interp, objv, len, indexPtr, anglePtr) != TCL_OK) {
             *indexPtr = indIn;
             result = TCL_ERROR;
-        } else if (GetPathBoolean(interp, objv, len, indexPtr, largeArcFlagPtr) != TCL_OK) {
+        } else if (GetPathBoolean(interp, objv, len, indexPtr,
+				  largeArcFlagPtr) != TCL_OK) {
             *indexPtr = indIn;
             result = TCL_ERROR;
-        } else if (GetPathBoolean(interp, objv, len, indexPtr, sweepFlagPtr) != TCL_OK) {
+        } else if (GetPathBoolean(interp, objv, len, indexPtr,
+				  sweepFlagPtr) != TCL_OK) {
             *indexPtr = indIn;
             result = TCL_ERROR;
-        } else if (GetPathPoint(interp, objv, len, indexPtr, xPtr, yPtr) != TCL_OK) {
+        } else if (GetPathPoint(interp, objv, len, indexPtr,
+				xPtr, yPtr) != TCL_OK) {
             *indexPtr = indIn;
             result = TCL_ERROR;
-        } 
+        }
     }
     return result;
 }
@@ -268,7 +331,7 @@ NewLineToAtom(double x, double y)
 }
 
 PathAtom *
-NewArcAtom(double radX, double radY, 
+NewArcAtom(double radX, double radY,
         double angle, char largeArcFlag, char sweepFlag, double x, double y)
 {
     PathAtom *atomPtr;
@@ -277,7 +340,7 @@ NewArcAtom(double radX, double radY,
     arcAtomPtr = (ArcAtom *) ckalloc((unsigned) (sizeof(ArcAtom)));
     atomPtr = (PathAtom *) arcAtomPtr;
     atomPtr->type = PATH_ATOM_A;
-    atomPtr->nextPtr = NULL;    
+    atomPtr->nextPtr = NULL;
     arcAtomPtr->radX = radX;
     arcAtomPtr->radY = radY;
     arcAtomPtr->angle = angle;
@@ -294,7 +357,8 @@ NewQuadBezierAtom(double ctrlX, double ctrlY, double anchorX, double anchorY)
     PathAtom *atomPtr;
     QuadBezierAtom *quadBezierAtomPtr;
 
-    quadBezierAtomPtr = (QuadBezierAtom *) ckalloc((unsigned) (sizeof(QuadBezierAtom)));
+    quadBezierAtomPtr =
+	(QuadBezierAtom *) ckalloc((unsigned) (sizeof(QuadBezierAtom)));
     atomPtr = (PathAtom *) quadBezierAtomPtr;
     atomPtr->type = PATH_ATOM_Q;
     atomPtr->nextPtr = NULL;
@@ -306,7 +370,7 @@ NewQuadBezierAtom(double ctrlX, double ctrlY, double anchorX, double anchorY)
 }
 
 PathAtom *
-NewCurveToAtom(double ctrlX1, double ctrlY1, double ctrlX2, double ctrlY2, 
+NewCurveToAtom(double ctrlX1, double ctrlY1, double ctrlX2, double ctrlY2,
         double anchorX, double anchorY)
 {
     PathAtom *atomPtr;
@@ -332,7 +396,7 @@ NewRectAtom(double pointsPtr[])
     RectAtom *rectAtomPtr;
 
     rectAtomPtr = (RectAtom *) ckalloc((unsigned) (sizeof(RectAtom)));
-    atomPtr = (PathAtom *) rectAtomPtr;    
+    atomPtr = (PathAtom *) rectAtomPtr;
     atomPtr->nextPtr = NULL;
     atomPtr->type = PATH_ATOM_RECT;
     rectAtomPtr->x = pointsPtr[0];
@@ -375,23 +439,24 @@ NewCloseAtom(double x, double y)
  */
 
 int
-TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPtr, int *lenPtr)
+TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr,
+		   PathAtom **atomPtrPtr, Tcl_Size *lenPtr)
 {
-    char 	currentInstr;		/* current instruction (M, l, c, etc.) */
-    char 	lastInstr;			/* previous instruction */
+    char 	currentInstr;	/* current instruction (M, l, c, etc.) */
+    char 	lastInstr;	/* previous instruction */
     int 	len;
     int 	currentInd;
     int 	index;
     int 	next;
     int 	relative;
     double 	currentX, currentY;	/* current point */
-    double 	startX, startY;		/* the current moveto point */
-    double 	ctrlX, ctrlY;		/* last control point, for s, S, t, T */
+    double 	startX, startY;	/* the current moveto point */
+    double 	ctrlX, ctrlY;	/* last control point, for s, S, t, T */
     double 	x, y;
     Tcl_Obj **objv;
     PathAtom *atomPtr = NULL;
     PathAtom *currentAtomPtr = NULL;
-    
+
     *atomPtrPtr = NULL;
     currentX = 0.0;
     currentY = 0.0;
@@ -401,20 +466,20 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
     ctrlY = 0.0;
     lastInstr = 'M';	/* If first instruction is missing it defaults to M ? */
     relative = 0;
-        
+
     if (Tcl_ListObjGetElements(interp, listObjPtr, lenPtr, &objv) != TCL_OK) {
         return TCL_ERROR;
     }
     len = *lenPtr;
-    
+
     /* First some error checking. Necessary??? */
     if (len < 3) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(
                 "path specification too short", -1));
         return TCL_ERROR;
     }
-    if ((GetPathInstruction(interp, objv, 0, &currentInstr) != PATH_NEXT_INSTRUCTION) || 
-            (toupper(currentInstr) != 'M')) {
+    if ((GetPathInstruction(interp, objv, 0, &currentInstr)
+	 != PATH_NEXT_INSTRUCTION) || (toupper(currentInstr) != 'M')) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(
                 "path must start with M or m", -1));
         return TCL_ERROR;
@@ -424,7 +489,7 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
         return TCL_ERROR;
     }
     currentInd = 0;
-     
+
     while (currentInd < len) {
 
         next = GetPathInstruction(interp, objv, currentInd, &currentInstr);
@@ -434,7 +499,7 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
             relative = islower(currentInstr);
             currentInd++;
         } else if (next == PATH_NEXT_OTHER) {
-        
+
             /* Use rule to find instruction to use. */
             if (lastInstr == 'M') {
                 currentInstr = 'L';
@@ -446,9 +511,9 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
             relative = islower(currentInstr);
         }
         index = currentInd;
-        
+
         switch (currentInstr) {
-        
+
             case 'M': case 'm': {
                 if (GetPathPoint(interp, objv, len, &index, &x, &y) != TCL_OK) {
                     goto error;
@@ -456,7 +521,7 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 if (relative) {
                     x += currentX;
                     y += currentY;
-                }    
+                }
                 atomPtr = NewMoveToAtom(x, y);
                 if (currentAtomPtr == NULL) {
                     *atomPtrPtr = atomPtr;
@@ -470,17 +535,18 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 startY = y;
                 break;
             }
-            
+
             case 'L': case 'l': {
                 if (index > len - 2) {
-                    Tcl_SetObjResult(interp, Tcl_NewStringObj(kPathSyntaxError, -1));
+                    Tcl_SetObjResult(interp,
+				     Tcl_NewStringObj(kPathSyntaxError, -1));
                     goto error;
                 }
                 if (GetPathPoint(interp, objv, len, &index, &x, &y) == TCL_OK) {
                     if (relative) {
                         x += currentX;
                         y += currentY;
-                    }    
+                    }
                     atomPtr = NewLineToAtom(x, y);
                     currentAtomPtr->nextPtr = atomPtr;
                     currentAtomPtr = atomPtr;
@@ -491,19 +557,20 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 }
                 break;
             }
-            
+
             case 'A': case 'a': {
                 double radX, radY, angle;
                 char largeArcFlag, sweepFlag;
-                
+
                 if (GetPathArcParameters(interp, objv, len, &index,
                         &radX, &radY, &angle, &largeArcFlag, &sweepFlag,
                         &x, &y) == TCL_OK) {
                     if (relative) {
                         x += currentX;
                         y += currentY;
-                    }    
-                    atomPtr = NewArcAtom(radX, radY, angle, largeArcFlag, sweepFlag, x, y);
+                    }
+                    atomPtr = NewArcAtom(radX, radY, angle,
+					 largeArcFlag, sweepFlag, x, y);
                     currentAtomPtr->nextPtr = atomPtr;
                     currentAtomPtr = atomPtr;
                     currentX = x;
@@ -513,15 +580,17 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 }
                 break;
             }
-            
+
             case 'C': case 'c': {
                 double x1, y1, x2, y2;	/* The two control points. */
-                
+
                 if (index > len - 6) {
-                    Tcl_SetObjResult(interp, Tcl_NewStringObj(kPathSyntaxError, -1));
+                    Tcl_SetObjResult(interp,
+				     Tcl_NewStringObj(kPathSyntaxError, -1));
                     goto error;
                 }
-                if (GetPathThreePoints(interp, objv, len, &index, &x1, &y1, &x2, &y2, &x, &y) == TCL_OK) {
+                if (GetPathThreePoints(interp, objv, len, &index,
+				       &x1, &y1, &x2, &y2, &x, &y) == TCL_OK) {
                     if (relative) {
                         x1 += currentX;
                         y1 += currentY;
@@ -529,11 +598,11 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                         y2 += currentY;
                         x  += currentX;
                         y  += currentY;
-                    }    
+                    }
                     atomPtr = NewCurveToAtom(x1, y1, x2, y2, x, y);
                     currentAtomPtr->nextPtr = atomPtr;
                     currentAtomPtr = atomPtr;
-                    ctrlX = x2; 	/* Keep track of the last control point. */
+                    ctrlX = x2; /* Keep track of the last control point. */
                     ctrlY = y2;
                     currentX = x;
                     currentY = y;
@@ -542,15 +611,19 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 }
                 break;
             }
-            
+
             case 'S': case 's': {
                 double x1, y1;	/* The first control point. */
                 double x2, y2;	/* The second control point. */
-                
-                if ((toupper(lastInstr) == 'C') || (toupper(lastInstr) == 'S')) {
-                    /* The first controlpoint is the reflection of the last one about the current point: */
+
+                if ((toupper(lastInstr) == 'C') ||
+		    (toupper(lastInstr) == 'S')) {
+                    /*
+		     * The first controlpoint is the reflection
+		     * of the last one about the current point:
+		     */
                     x1 = 2 * currentX - ctrlX;
-                    y1 = 2 * currentY - ctrlY;                    
+                    y1 = 2 * currentY - ctrlY;
                 } else {
                     /* The first controlpoint is equal to the current point: */
                     x1 = currentX;
@@ -560,17 +633,18 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                     Tcl_SetObjResult(interp, Tcl_NewStringObj(kPathSyntaxError, -1));
                     goto error;
                 }
-                if (GetPathTwoPoints(interp, objv, len, &index, &x2, &y2, &x, &y) == TCL_OK) {
+                if (GetPathTwoPoints(interp, objv, len, &index,
+				     &x2, &y2, &x, &y) == TCL_OK) {
                     if (relative) {
                         x2 += currentX;
                         y2 += currentY;
                         x  += currentX;
                         y  += currentY;
-                    }    
+                    }
                     atomPtr = NewCurveToAtom(x1, y1, x2, y2, x, y);
                     currentAtomPtr->nextPtr = atomPtr;
                     currentAtomPtr = atomPtr;
-                    ctrlX = x2; 	/* Keep track of the last control point. */
+                    ctrlX = x2; /* Keep track of the last control point. */
                     ctrlY = y2;
                     currentX = x;
                     currentY = y;
@@ -579,21 +653,22 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 }
                 break;
             }
-            
+
             case 'Q': case 'q': {
                 double x1, y1;	/* The control point. */
-                
-                if (GetPathTwoPoints(interp, objv, len, &index, &x1, &y1, &x, &y) == TCL_OK) {
+
+                if (GetPathTwoPoints(interp, objv, len, &index,
+				     &x1, &y1, &x, &y) == TCL_OK) {
                     if (relative) {
                         x1 += currentX;
                         y1 += currentY;
                         x  += currentX;
                         y  += currentY;
-                    }    
+                    }
                     atomPtr = NewQuadBezierAtom(x1, y1, x, y);
                     currentAtomPtr->nextPtr = atomPtr;
                     currentAtomPtr = atomPtr;
-                    ctrlX = x1; 	/* Keep track of the last control point. */
+                    ctrlX = x1; /* Keep track of the last control point. */
                     ctrlY = y1;
                     currentX = x;
                     currentY = y;
@@ -602,14 +677,18 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 }
                 break;
             }
-            
+
             case 'T': case 't': {
                 double x1, y1;	/* The control point. */
-                
-                if ((toupper(lastInstr) == 'Q') || (toupper(lastInstr) == 'T')) {
-                    /* The controlpoint is the reflection of the last one about the current point: */
+
+                if ((toupper(lastInstr) == 'Q') ||
+		    (toupper(lastInstr) == 'T')) {
+                    /*
+		     * The controlpoint is the reflection
+		     * of the last one about the current point:
+		     */
                     x1 = 2 * currentX - ctrlX;
-                    y1 = 2 * currentY - ctrlY;                    
+                    y1 = 2 * currentY - ctrlY;
                 } else {
                     /* The controlpoint is equal to the current point: */
                     x1 = currentX;
@@ -619,11 +698,11 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                     if (relative) {
                         x  += currentX;
                         y  += currentY;
-                    }    
+                    }
                     atomPtr = NewQuadBezierAtom(x1, y1, x, y);
                     currentAtomPtr->nextPtr = atomPtr;
                     currentAtomPtr = atomPtr;
-                    ctrlX = x1; 	/* Keep track of the last control point. */
+                    ctrlX = x1;	/* Keep track of the last control point. */
                     ctrlY = y1;
                     currentX = x;
                     currentY = y;
@@ -632,10 +711,11 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 }
                 break;
             }
-            
+
             case 'H': {
-                while ((index < len) && 
-                        (GetPathDouble(interp, objv, len, &index, &x) == TCL_OK))
+                while ((index < len) &&
+                        (GetPathDouble(interp, objv, len, &index, &x)
+			 == TCL_OK))
                     ;
                 atomPtr = NewLineToAtom(x, currentY);
                 currentAtomPtr->nextPtr = atomPtr;
@@ -643,13 +723,14 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 currentX = x;
                 break;
             }
-            
+
             case 'h': {
                 double z;
-                
+
                 x = currentX;
                 while ((index < len) &&
-                        (GetPathDouble(interp, objv, len, &index, &z) == TCL_OK)) {
+		       (GetPathDouble(interp, objv, len, &index, &z)
+			== TCL_OK)) {
                     x += z;
                 }
                 atomPtr = NewLineToAtom(x, currentY);
@@ -658,10 +739,11 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 currentX = x;
                 break;
             }
-            
+
             case 'V': {
-                while ((index < len) && 
-                        (GetPathDouble(interp, objv, len, &index, &y) == TCL_OK))
+                while ((index < len) &&
+		       (GetPathDouble(interp, objv, len, &index, &y)
+			== TCL_OK))
                     ;
                 atomPtr = NewLineToAtom(currentX, y);
                 currentAtomPtr->nextPtr = atomPtr;
@@ -669,13 +751,14 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 currentY = y;
                 break;
             }
-            
+
             case 'v': {
                 double z;
-                
+
                 y = currentY;
                 while ((index < len) &&
-                        (GetPathDouble(interp, objv, len, &index, &z) == TCL_OK)) {
+		       (GetPathDouble(interp, objv, len, &index, &z)
+			== TCL_OK)) {
                     y += z;
                 }
                 atomPtr = NewLineToAtom(currentX, y);
@@ -684,7 +767,7 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 currentY = y;
                 break;
             }
-            
+
             case 'Z': case 'z': {
                 atomPtr = NewCloseAtom(startX, startY);
                 currentAtomPtr->nextPtr = atomPtr;
@@ -693,7 +776,7 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
                 currentY = startY;
                 break;
             }
-            
+
             default: {
                 Tcl_SetObjResult(interp, Tcl_NewStringObj(
                         "unrecognized path instruction", -1));
@@ -703,12 +786,12 @@ TkPathParseToAtoms(Tcl_Interp *interp, Tcl_Obj *listObjPtr, PathAtom **atomPtrPt
         currentInd = index;
         lastInstr = currentInstr;
     }
-    
+
     /* When we parse coordinates there may be some junk result
      * left in the interpreter to be cleared out. */
     Tcl_ResetResult(interp);
     return TCL_OK;
-    
+
 error:
 
     TkPathFreeAtoms(*atomPtrPtr);
@@ -765,66 +848,93 @@ TkPathFreeAtoms(PathAtom *pathAtomPtr)
 int
 TkPathNormalize(Tcl_Interp *interp, PathAtom *atomPtr, Tcl_Obj **listObjPtrPtr)
 {
-    Tcl_Obj *normObjPtr;    
+    Tcl_Obj *normObjPtr;
 
     normObjPtr = Tcl_NewListObj( 0, (Tcl_Obj **) NULL );
 
     while (atomPtr != NULL) {
-    
+
         switch (atomPtr->type) {
-            case PATH_ATOM_M: { 
+            case PATH_ATOM_M: {
                 MoveToAtom *move = (MoveToAtom *) atomPtr;
-                
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewStringObj("M", -1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(move->x));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(move->y));
+
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewStringObj("M", -1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(move->x));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(move->y));
                 break;
             }
             case PATH_ATOM_L: {
                 LineToAtom *line = (LineToAtom *) atomPtr;
-                
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewStringObj("L", -1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(line->x));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(line->y));
+
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewStringObj("L", -1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(line->x));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(line->y));
                 break;
             }
             case PATH_ATOM_A: {
                 ArcAtom *arc = (ArcAtom *) atomPtr;
-                
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewStringObj("A", -1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(arc->radX));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(arc->radY));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(arc->angle));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewBooleanObj(arc->largeArcFlag));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewBooleanObj(arc->sweepFlag));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(arc->x));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(arc->y));
+
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewStringObj("A", -1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(arc->radX));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(arc->radY));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(arc->angle));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewBooleanObj(arc->largeArcFlag));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewBooleanObj(arc->sweepFlag));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(arc->x));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(arc->y));
                 break;
             }
             case PATH_ATOM_Q: {
                 QuadBezierAtom *quad = (QuadBezierAtom *) atomPtr;
-                
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewStringObj("Q", -1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(quad->ctrlX));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(quad->ctrlY));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(quad->anchorX));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(quad->anchorY));
+
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewStringObj("Q", -1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(quad->ctrlX));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(quad->ctrlY));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(quad->anchorX));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(quad->anchorY));
                 break;
             }
             case PATH_ATOM_C: {
                 CurveToAtom *curve = (CurveToAtom *) atomPtr;
 
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewStringObj("C", -1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(curve->ctrlX1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(curve->ctrlY1));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(curve->ctrlX2));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(curve->ctrlY2));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(curve->anchorX));
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewDoubleObj(curve->anchorY));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewStringObj("C", -1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(curve->ctrlX1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(curve->ctrlY1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(curve->ctrlX2));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(curve->ctrlY2));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(curve->anchorX));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewDoubleObj(curve->anchorY));
                 break;
             }
             case PATH_ATOM_Z: {
-                Tcl_ListObjAppendElement(interp, normObjPtr, Tcl_NewStringObj("Z", -1));
+                Tcl_ListObjAppendElement(interp, normObjPtr,
+					 Tcl_NewStringObj("Z", -1));
                 break;
             }
             case PATH_ATOM_ELLIPSE:
@@ -864,35 +974,35 @@ TkPathMakePath(
     TkPathBeginPath(context, stylePtr);
 
     while (atomPtr != NULL) {
-    
+
         switch (atomPtr->type) {
-            case PATH_ATOM_M: { 
+            case PATH_ATOM_M: {
                 MoveToAtom *move = (MoveToAtom *) atomPtr;
                 TkPathMoveTo(context, move->x, move->y);
                 break;
             }
             case PATH_ATOM_L: {
-                LineToAtom *line = (LineToAtom *) atomPtr;                
+                LineToAtom *line = (LineToAtom *) atomPtr;
                 TkPathLineTo(context, line->x, line->y);
                 break;
             }
             case PATH_ATOM_A: {
                 ArcAtom *arc = (ArcAtom *) atomPtr;
-                TkPathArcTo(context, arc->radX, arc->radY, arc->angle, 
+                TkPathArcTo(context, arc->radX, arc->radY, arc->angle,
                         arc->largeArcFlag, arc->sweepFlag,
                         arc->x, arc->y);
                 break;
             }
             case PATH_ATOM_Q: {
                 QuadBezierAtom *quad = (QuadBezierAtom *) atomPtr;
-                TkPathQuadBezier(context, 
+                TkPathQuadBezier(context,
                         quad->ctrlX, quad->ctrlY,
                         quad->anchorX, quad->anchorY);
                 break;
             }
             case PATH_ATOM_C: {
                 CurveToAtom *curve = (CurveToAtom *) atomPtr;
-                TkPathCurveTo(context, 
+                TkPathCurveTo(context,
                         curve->ctrlX1, curve->ctrlY1,
                         curve->ctrlX2, curve->ctrlY2,
                         curve->anchorX, curve->anchorY);
@@ -909,7 +1019,8 @@ TkPathMakePath(
             }
             case PATH_ATOM_RECT: {
                 RectAtom *rect = (RectAtom *) atomPtr;
-                TkPathRect(context, rect->x, rect->y, rect->width, rect->height);
+                TkPathRect(context, rect->x, rect->y,
+			   rect->width, rect->height);
                 break;
             }
         }
@@ -938,7 +1049,7 @@ TkPathMakePath(
 
 void
 TkPathArcToUsingBezier(TkPathContext ctx,
-        double rx, double ry, 
+        double rx, double ry,
         double phiDegrees, 	/* The rotation angle in degrees! */
         char largeArcFlag, char sweepFlag, double x2, double y2)
 {
@@ -950,51 +1061,54 @@ TkPathArcToUsingBezier(TkPathContext ctx,
     double sinPhi, cosPhi;
     double delta, t;
     PathPoint pt;
-    
+
     TkPathGetCurrentPosition(ctx, &pt);
     x1 = pt.x;
     y1 = pt.y;
 
     /* All angles except phi is in radians! */
     phi = phiDegrees * DEGREES_TO_RADIANS;
-    
+
     /* Check return value and take action. */
     result = EndpointToCentralArcParameters(x1, y1,
             x2, y2, rx, ry, phi, largeArcFlag, sweepFlag,
             &cx, &cy, &rx, &ry,
             &theta1, &dtheta);
     if (result == kPathArcSkip) {
-		return;
-	} else if (result == kPathArcLine) {
-		TkPathLineTo(ctx, x2, y2);
-		return;
+	return;
+    } else if (result == kPathArcLine) {
+	TkPathLineTo(ctx, x2, y2);
+	return;
     }
     sinPhi = sin(phi);
     cosPhi = cos(phi);
-    
-    /* Convert into cubic bezier segments <= 90deg (from mozilla/svg; not checked) */
+
+    /*
+     * Convert into cubic bezier segments <= 90deg
+     * (from mozilla/svg; not checked)
+     */
     segments = (int) ceil(fabs(dtheta/(M_PI/2.0)));
     delta = dtheta/segments;
     t = 8.0/3.0 * sin(delta/4.0) * sin(delta/4.0) / sin(delta/2.0);
-    
+
     for (i = 0; i < segments; ++i) {
         double cosTheta1 = cos(theta1);
         double sinTheta1 = sin(theta1);
         double theta2 = theta1 + delta;
         double cosTheta2 = cos(theta2);
         double sinTheta2 = sin(theta2);
-        
+
         /* a) calculate endpoint of the segment: */
         double xe = cosPhi * rx*cosTheta2 - sinPhi * ry*sinTheta2 + cx;
         double ye = sinPhi * rx*cosTheta2 + cosPhi * ry*sinTheta2 + cy;
-    
+
         /* b) calculate gradients at start/end points of segment: */
         double dx1 = t * ( - cosPhi * rx*sinTheta1 - sinPhi * ry*cosTheta1);
         double dy1 = t * ( - sinPhi * rx*sinTheta1 + cosPhi * ry*cosTheta1);
-        
+
         double dxe = t * ( cosPhi * rx*sinTheta2 + sinPhi * ry*cosTheta2);
         double dye = t * ( sinPhi * rx*sinTheta2 - cosPhi * ry*cosTheta2);
-    
+
         /* c) draw the cubic bezier: */
         TkPathCurveTo(ctx, x1+dx1, y1+dy1, xe+dxe, ye+dye, xe, ye);
 
@@ -1005,6 +1119,1229 @@ TkPathArcToUsingBezier(TkPathContext ctx,
     }
 }
 
-/*-----------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 
+static int
+PrintNumber(
+    char *buffer,
+    int fracDigits,
+    double number)
+{
+    int len;
 
+    sprintf(buffer, "%.*f", fracDigits, number);
+    len = strlen(buffer);
+    while (len > 0) {
+	if (buffer[len-1] != '0') {
+	    break;
+	}
+	--len;
+	buffer[len] = '\0';
+    }
+    if ((len > 0) && (buffer[len-1] == '.')) {
+	--len;
+	buffer[len] = '\0';
+    }
+    if ((len == 0) || (strcmp(buffer, "-0") == 0)) {
+	strcpy(buffer, "0");
+	len = 1;
+    }
+    return len;
+}
+
+/*---------------------------------------------------------------------------*/
+
+MODULE_SCOPE int
+TkPathPdfNumber(
+    Tcl_Obj *ret,
+    int fracDigits,
+    double number,
+    const char *append)
+{
+    char buffer[TCL_DOUBLE_SPACE*2];
+    int len = PrintNumber(buffer, fracDigits, number);
+
+    Tcl_AppendToObj(ret, buffer, len);
+    if (append != NULL) {
+	Tcl_AppendToObj(ret, append, -1);
+    }
+    return len;
+}
+
+/*---------------------------------------------------------------------------*/
+
+MODULE_SCOPE int
+TkPathPdfColor(
+    Tcl_Obj *ret,
+    XColor *colorPtr,
+    const char *command)
+{
+    double red, green, blue;
+
+    /*
+     * No color map entry for this color. Grab the color's intensities and
+     * output Postscript commands for them. Special note: X uses a range of
+     * 0-65535 for intensities, but most displays only use a range of 0-255,
+     * which maps to (0, 256, 512, ... 65280) in the X scale. This means that
+     * there's no way to get perfect white, since the highest intensity is
+     * only 65280 out of 65535. To work around this problem, rescale the X
+     * intensity to a 0-255 scale and use that as the basis for the Postscript
+     * colors. This scheme still won't work if the display only uses 4 bits
+     * per color, but most diplays use at least 8 bits.
+     */
+
+    red = ((double) (((int) colorPtr->red) >> 8))/255.0;
+    green = ((double) (((int) colorPtr->green) >> 8))/255.0;
+    blue = ((double) (((int) colorPtr->blue) >> 8))/255.0;
+    TkPathPdfNumber(ret, 3, red, " ");
+    TkPathPdfNumber(ret, 3, green, " ");
+    TkPathPdfNumber(ret, 3, blue, " ");
+    Tcl_AppendToObj(ret, command, -1);
+    Tcl_AppendToObj(ret, "\n", 1);
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+MODULE_SCOPE int
+TkPathPdfArrow(
+    Tcl_Interp *interp,
+    ArrowDescr *arrow,
+    Tk_PathStyle *const style)
+{
+    Tk_PathStyle arrowStyle = *style;
+    TkPathColor fc;
+    PathAtom *atomPtr;
+
+    if (arrow->arrowEnabled && arrow->arrowPointsPtr != NULL) {
+	Tcl_Obj *ret;
+
+	if (arrow->arrowFillRatio > 0.0 && arrow->arrowLength != 0.0) {
+	    arrowStyle.strokeWidth = 0.0;
+	    fc.color = arrowStyle.strokeColor;
+	    fc.gradientInstPtr = NULL;
+	    arrowStyle.fill = &fc;
+	    arrowStyle.fillOpacity = arrowStyle.strokeOpacity;
+	} else {
+	    arrowStyle.fill = NULL;
+	    arrowStyle.fillOpacity = 1.0;
+	    arrowStyle.joinStyle = 1;
+	    arrowStyle.dashPtr = NULL;
+	}
+	atomPtr = MakePathAtomsFromArrow(arrow);
+	ret = Tcl_GetObjResult(interp);
+	Tcl_IncrRefCount(ret);
+	Tcl_ResetResult(interp);
+	if (TkPathPdf(interp, atomPtr, &arrowStyle, NULL, 0, NULL) != TCL_OK) {
+	    Tcl_DecrRefCount(ret);
+	    TkPathFreeAtoms(atomPtr);
+	    return TCL_ERROR;
+	}
+	Tcl_AppendObjToObj(ret, Tcl_GetObjResult(interp));
+	Tcl_SetObjResult(interp, ret);
+	TkPathFreeAtoms(atomPtr);
+    }
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+MODULE_SCOPE int
+TkPathPdf(
+    Tcl_Interp *interp,     /* Used to return resulting info */
+    PathAtom *atom0Ptr,     /* The actual path as a linked list
+                             * of PathAtoms. */
+    Tk_PathStyle *stylePtr, /* The path's style. */
+    PathRect *bboxPtr,      /* The bounding box or NULL. */
+    Tcl_Size objc,	    /* Number of arguments of callback. */
+    Tcl_Obj *const objv[])  /* Argument list of callback. */
+{
+    Tcl_Obj *ret = Tcl_NewObj();
+    Tcl_Obj *mkextgs = (objc > 0) ? objv[0] : NULL;
+    Tcl_Obj *mkobj = (objc > 1) ? objv[1] : NULL;
+    Tcl_Obj *mkgrad = (objc > 2) ? objv[2] : NULL;
+    Tcl_Obj *gsAlpha = NULL;
+    int myZ = 0, f = 0, s = 0, isLinear = 0;
+    TkPointsContext_ context;
+    PathAtom *atomPtr;
+    char *gradName = NULL;
+    TMatrix gm;
+
+    context.current[0] = context.current[1] = 0.;
+    context.lastMove[0] = context.lastMove[1] = 0.;
+    context.widthCode = 0; /* TODO check */
+
+    if (stylePtr != NULL) {
+	TkPathGradientMaster *gradientPtr =
+	    GetGradientMasterFromPathColor(stylePtr->fill);
+
+	if (gradientPtr != NULL) {
+	    isLinear = (gradientPtr->type == kPathGradientTypeLinear);
+	}
+	if (mkextgs != NULL) {
+	    Tcl_Size retc;
+	    long gradId, smaskId;
+	    char *gradAlpha = NULL;
+	    Tcl_Obj *gs, *cmd, **retv;
+
+	    if ((mkgrad != NULL) &&
+		(gradientPtr != NULL) &&
+		(bboxPtr != NULL)) {
+		if (PathPdfGradient(interp, 1, mkobj, mkgrad, bboxPtr,
+				    gradientPtr, &gradAlpha, &gradId, &gm)
+		    != TCL_OK) {
+		    return TCL_ERROR;
+		}
+	    }
+	    if (gradAlpha != NULL) {
+		if (PathPdfGradSoftMask(interp, mkobj, bboxPtr,
+					gradAlpha, gradId,
+					isLinear ? NULL : &gm) != TCL_OK) {
+		    return TCL_ERROR;
+		}
+		Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &smaskId);
+		gs = TkPathExtGS(stylePtr, &smaskId);
+		cmd = Tcl_DuplicateObj(mkextgs);
+		Tcl_IncrRefCount(cmd);
+		if ((Tcl_ListObjAppendElement(interp, cmd, gs) != TCL_OK) ||
+		    (Tcl_ListObjAppendElement(interp, cmd,
+				Tcl_NewLongObj(smaskId)) != TCL_OK)) {
+		    Tcl_DecrRefCount(cmd);
+		    Tcl_DecrRefCount(gs);
+		    Tcl_DecrRefCount(ret);
+		    return TCL_ERROR;
+		}
+		if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+		    Tcl_DecrRefCount(cmd);
+		    Tcl_DecrRefCount(ret);
+		    return TCL_ERROR;
+		}
+		Tcl_DecrRefCount(cmd);
+		/*
+		 * Get name of extended graphics state.
+		 */
+		if (Tcl_ListObjGetElements(interp, Tcl_GetObjResult(interp),
+					   &retc, &retv) != TCL_OK) {
+		    Tcl_DecrRefCount(ret);
+		    return TCL_ERROR;
+		}
+		if (retc < 2) {
+		    Tcl_SetResult(interp, (char *) "missing PDF id/name",
+				  TCL_STATIC);
+		    Tcl_DecrRefCount(ret);
+		    return TCL_ERROR;
+		}
+		gsAlpha = retv[1];
+		Tcl_IncrRefCount(gsAlpha);
+	    }
+	    gs = TkPathExtGS(stylePtr, NULL);
+	    if (gs != NULL) {
+		cmd = Tcl_DuplicateObj(mkextgs);
+		Tcl_IncrRefCount(cmd);
+		if ((Tcl_ListObjAppendElement(interp, cmd, gs) != TCL_OK) ||
+		    ((gradAlpha != NULL) &&
+		     (Tcl_ListObjAppendElement(interp, cmd,
+				Tcl_NewLongObj(smaskId)) != TCL_OK))) {
+		    Tcl_DecrRefCount(cmd);
+		    Tcl_DecrRefCount(gs);
+		    Tcl_DecrRefCount(ret);
+		    if (gsAlpha != NULL) {
+			Tcl_DecrRefCount(gsAlpha);
+		    }
+		    return TCL_ERROR;
+		}
+		if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+		    Tcl_DecrRefCount(cmd);
+		    Tcl_DecrRefCount(ret);
+		    if (gsAlpha != NULL) {
+			Tcl_DecrRefCount(gsAlpha);
+		    }
+		    return TCL_ERROR;
+		}
+		Tcl_DecrRefCount(cmd);
+		/*
+		 * Get name of extended graphics state.
+		 */
+		if (Tcl_ListObjGetElements(interp, Tcl_GetObjResult(interp),
+					   &retc, &retv) != TCL_OK) {
+		    Tcl_DecrRefCount(ret);
+		    if (gsAlpha != NULL) {
+			Tcl_DecrRefCount(gsAlpha);
+		    }
+		    return TCL_ERROR;
+		}
+		if (retc < 2) {
+		    Tcl_SetResult(interp, (char *) "missing PDF id/name",
+				  TCL_STATIC);
+		    Tcl_DecrRefCount(ret);
+		    if (gsAlpha != NULL) {
+			Tcl_DecrRefCount(gsAlpha);
+		    }
+		    return TCL_ERROR;
+		}
+		Tcl_AppendPrintfToObj(ret, "/%s gs\n", Tcl_GetString(retv[1]));
+	    }
+	}
+	if (stylePtr->matrixPtr != NULL) {
+	    /* TMatrix */
+	    TkPathPdfNumber(ret, 6, stylePtr->matrixPtr->a, " ");
+	    TkPathPdfNumber(ret, 6, stylePtr->matrixPtr->b, " ");
+	    TkPathPdfNumber(ret, 6, stylePtr->matrixPtr->c, " ");
+	    TkPathPdfNumber(ret, 6, stylePtr->matrixPtr->d, " ");
+	    TkPathPdfNumber(ret, 3, stylePtr->matrixPtr->tx, " ");
+	    TkPathPdfNumber(ret, 3, stylePtr->matrixPtr->ty, " cm\n");
+	}
+	if ((mkgrad != NULL) && (gradientPtr != NULL) && (bboxPtr != NULL)) {
+	    if (PathPdfGradient(interp, 0, mkobj, mkgrad, bboxPtr,
+				gradientPtr, &gradName, NULL, &gm) != TCL_OK) {
+		Tcl_DecrRefCount(ret);
+		if (gsAlpha != NULL) {
+		    Tcl_DecrRefCount(gsAlpha);
+		}
+		return TCL_ERROR;
+	    }
+	}
+	TkPathPdfNumber(ret, 3, stylePtr->strokeWidth, " w\n");
+	if (stylePtr->strokeColor) {
+	    TkPathPdfColor(ret, stylePtr->strokeColor, "RG");
+	    s = 1;
+	}
+	if (stylePtr->fill && stylePtr->fill->color) {
+	    TkPathPdfColor(ret, stylePtr->fill->color, "rg");
+	    f = 1;
+	}
+	if (stylePtr->capStyle == CapRound) {
+       	    Tcl_AppendToObj(ret, "1 J\n", 4);
+	} else if (stylePtr->capStyle == CapProjecting) {
+	    Tcl_AppendToObj(ret, "2 J\n", 4);
+	}
+	if (stylePtr->joinStyle == JoinRound) {
+	    Tcl_AppendToObj(ret, "1 j\n", 4);
+	} else if (stylePtr->joinStyle == JoinBevel) {
+	    Tcl_AppendToObj(ret, "2 j\n", 4);
+	}
+    }
+    if (gradName != NULL) {
+	Tcl_AppendToObj(ret, "q\n", 2);
+	if (isLinear && (gsAlpha != NULL)) {
+	    Tcl_AppendPrintfToObj(ret, "/%s gs\n", Tcl_GetString(gsAlpha));
+	    Tcl_DecrRefCount(gsAlpha);
+	    gsAlpha = NULL;
+	}
+    }
+again:
+    atomPtr = atom0Ptr;
+    /* borrowed from TkPathMakePath() */
+    while (atomPtr != NULL) {
+        switch (atomPtr->type) {
+            case PATH_ATOM_M: {
+                MoveToAtom *move = (MoveToAtom *) atomPtr;
+
+                PathPdfMoveTo(ret, &context, move->x, move->y);
+		myZ = 0;
+                break;
+            }
+            case PATH_ATOM_L: {
+                LineToAtom *line = (LineToAtom *) atomPtr;
+
+                PathPdfLineTo(ret, &context, line->x, line->y);
+		myZ = 1;
+                break;
+            }
+            case PATH_ATOM_A: {
+                ArcAtom *arc = (ArcAtom *) atomPtr;
+
+                PathPdfArcTo(ret, &context, arc->radX, arc->radY, arc->angle,
+                        arc->largeArcFlag, arc->sweepFlag,
+                        arc->x, arc->y);
+		myZ = 1;
+                break;
+            }
+            case PATH_ATOM_Q: {
+                QuadBezierAtom *quad = (QuadBezierAtom *) atomPtr;
+
+                PathPdfQuadBezier(ret, &context,
+                        quad->ctrlX, quad->ctrlY,
+                        quad->anchorX, quad->anchorY);
+		myZ = 1;
+                break;
+            }
+            case PATH_ATOM_C: {
+                CurveToAtom *curve = (CurveToAtom *) atomPtr;
+
+                PathPdfCurveTo(ret, &context,
+                        curve->ctrlX1, curve->ctrlY1,
+                        curve->ctrlX2, curve->ctrlY2,
+                        curve->anchorX, curve->anchorY);
+		myZ = 1;
+                break;
+            }
+            case PATH_ATOM_Z: {
+		if (myZ) {
+		    PathPdfClosePath(ret, &context);
+		    myZ = 0;
+		}
+                break;
+            }
+            case PATH_ATOM_ELLIPSE: {
+                EllipseAtom *ell = (EllipseAtom *) atomPtr;
+
+                PathPdfOval(ret, &context, ell->cx, ell->cy, ell->rx, ell->ry);
+		myZ = 0;
+                break;
+            }
+            case PATH_ATOM_RECT: {
+                RectAtom *rect = (RectAtom *) atomPtr;
+
+                PathPdfRect(ret, &context, rect->x, rect->y,
+			rect->width, rect->height);
+		myZ = 0;
+                break;
+            }
+        }
+        atomPtr = atomPtr->nextPtr;
+    }
+    if (gradName != NULL) {
+	f = 0;
+	/* set clipping and fill using gradient */
+	Tcl_AppendToObj(ret, "W n\n", 4);
+	TkPathPdfNumber(ret, 6, gm.a, " ");
+	TkPathPdfNumber(ret, 6, gm.b, " ");
+	TkPathPdfNumber(ret, 6, gm.c, " ");
+	TkPathPdfNumber(ret, 6, gm.d, " ");
+	TkPathPdfNumber(ret, 3, gm.tx, " ");
+	TkPathPdfNumber(ret, 3, gm.ty, " cm\n");
+	if (gsAlpha != NULL) {
+	    Tcl_AppendPrintfToObj(ret, "/%s gs\n", Tcl_GetString(gsAlpha));
+	    Tcl_DecrRefCount(gsAlpha);
+	    gsAlpha = NULL;
+	}
+	Tcl_AppendPrintfToObj(ret, "/%s sh\nQ\n", gradName);
+	gradName = NULL;
+	if (s) {
+	    goto again;
+	}
+    }
+    if (gsAlpha != NULL) {
+	Tcl_DecrRefCount(gsAlpha);
+	gsAlpha = NULL;
+    }
+    if (f && s) {
+	Tcl_AppendToObj(ret, "B\n", 2);
+    } else if (f && !s) {
+	Tcl_AppendToObj(ret, "f\n", 2);
+    } else if (s) {
+	Tcl_AppendToObj(ret, "S\n", 2);
+    } else {
+	Tcl_AppendToObj(ret, "n\n", 2);
+    }
+    Tcl_SetObjResult(interp, ret);
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfMoveTo(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double x, double y)
+{
+    context->current[0] = x;
+    context->current[1] = y;
+    context->lastMove[0] = x;
+    context->lastMove[1] = y;
+    TkPathPdfNumber(list, 3, x, " ");
+    TkPathPdfNumber(list, 3, y, " m\n");
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfLineTo(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double x, double y)
+{
+    context->current[0] = x;
+    context->current[1] = y;
+    TkPathPdfNumber(list, 3, x, " ");
+    TkPathPdfNumber(list, 3, y, " l\n");
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfCurveTo(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double x1, double y1, double x2, double y2, double x, double y)
+{
+    double coordPtr[2*kPathNumSegmentsCurveTo];
+    double control[8];
+    int i;
+
+    control[0] = context->current[0];
+    control[1] = context->current[1];
+    control[2] = x1;
+    control[3] = y1;
+    control[4] = x2;
+    control[5] = y2;
+    control[6] = x;
+    control[7] = y;
+    CurveSegments(control, 0, kPathNumSegmentsCurveTo, coordPtr);
+    for (i = 0; i < 2 * kPathNumSegmentsCurveTo; i = i + 2) {
+	TkPathPdfNumber(list, 3, coordPtr[i], " ");
+	TkPathPdfNumber(list, 3, coordPtr[i+1], " l\n");
+    }
+    context->current[0] = x;
+    context->current[1] = y;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfArcTo(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double rx, double ry,
+    double phiDegrees, 	/* The rotation angle in degrees! */
+    char largeArcFlag, char sweepFlag, double x, double y)
+{
+    if (gDepixelize) {
+        x = PATH_DEPIXELIZE(context->widthCode, x);
+        y = PATH_DEPIXELIZE(context->widthCode, y);
+    }
+    PathPdfArcToUsingBezier(list,context, rx, ry, phiDegrees,
+		largeArcFlag, sweepFlag, x, y);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfQuadBezier(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double ctrlX, double ctrlY, double x, double y)
+{
+    double cx, cy;
+    double x31, y31, x32, y32;
+
+    cx = context->current[0];
+    cy = context->current[1];
+
+    /*
+     * Conversion of quadratic bezier curve to cubic bezier curve:
+     * (mozilla/svg) Unchecked! Must be an approximation!
+     */
+    x31 = cx + (ctrlX - cx) * 2 / 3;
+    y31 = cy + (ctrlY - cy) * 2 / 3;
+    x32 = ctrlX + (x - ctrlX) / 3;
+    y32 = ctrlY + (y - ctrlY) / 3;
+
+    PathPdfCurveTo(list, context, x31, y31, x32, y32, x, y);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfArcToUsingBezier(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double rx, double ry,
+    double phiDegrees, 	/* The rotation angle in degrees! */
+    char largeArcFlag, char sweepFlag, double x2, double y2)
+{
+    int result;
+    int i, segments;
+    double x1, y1;
+    double cx, cy;
+    double theta1, dtheta, phi;
+    double sinPhi, cosPhi;
+    double delta, t;
+
+    x1 = context->current[0];
+    y1 = context->current[1];
+
+    /* All angles except phi is in radians! */
+    phi = phiDegrees * DEGREES_TO_RADIANS;
+
+    /* Check return value and take action. */
+    result = EndpointToCentralArcParameters(x1, y1,
+            x2, y2, rx, ry, phi, largeArcFlag, sweepFlag,
+            &cx, &cy, &rx, &ry,
+            &theta1, &dtheta);
+    if (result == kPathArcSkip) {
+	return;
+    } else if (result == kPathArcLine) {
+	PathPdfLineTo(list, context, x2, y2);
+	return;
+    }
+    sinPhi = sin(phi);
+    cosPhi = cos(phi);
+
+    /*
+     * Convert into cubic bezier segments <= 90deg
+     * (from mozilla/svg; not checked)
+     */
+    segments = (int) ceil(fabs(dtheta/(M_PI/2.0)));
+    delta = dtheta/segments;
+    t = 8.0/3.0 * sin(delta/4.0) * sin(delta/4.0) / sin(delta/2.0);
+
+    for (i = 0; i < segments; ++i) {
+        double cosTheta1 = cos(theta1);
+        double sinTheta1 = sin(theta1);
+        double theta2 = theta1 + delta;
+        double cosTheta2 = cos(theta2);
+        double sinTheta2 = sin(theta2);
+
+        /* a) calculate endpoint of the segment: */
+        double xe = cosPhi * rx*cosTheta2 - sinPhi * ry*sinTheta2 + cx;
+        double ye = sinPhi * rx*cosTheta2 + cosPhi * ry*sinTheta2 + cy;
+
+        /* b) calculate gradients at start/end points of segment: */
+        double dx1 = t * ( - cosPhi * rx*sinTheta1 - sinPhi * ry*cosTheta1);
+        double dy1 = t * ( - sinPhi * rx*sinTheta1 + cosPhi * ry*cosTheta1);
+
+        double dxe = t * ( cosPhi * rx*sinTheta2 + sinPhi * ry*cosTheta2);
+        double dye = t * ( sinPhi * rx*sinTheta2 - cosPhi * ry*cosTheta2);
+
+        /* c) draw the cubic bezier: */
+        PathPdfCurveTo(list, context, x1+dx1, y1+dy1, xe+dxe, ye+dye, xe, ye);
+
+        /* do next segment */
+        theta1 = theta2;
+        x1 = (float) xe;
+        y1 = (float) ye;
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfClosePath(
+    Tcl_Obj *list,
+    TkPointsContext_ *context)
+{
+    double xy[2];
+
+    xy[0] = context->current[0] = context->lastMove[0];
+    xy[1] = context->current[1] = context->lastMove[1];
+    TkPathPdfNumber(list, 3, xy[0], " ");
+    TkPathPdfNumber(list, 3, xy[1], " l\n");
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfOval(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double cx, double cy, double rx, double ry)
+{
+    PathPdfMoveTo(list, context, cx + rx, cy);
+    PathPdfArcToUsingBezier(list, context, rx, ry, 0.0, 1, 1, cx - rx, cy);
+    PathPdfArcToUsingBezier(list, context, rx, ry, 0.0, 1, 1, cx + rx, cy);
+    PathPdfClosePath(list, context);
+}
+
+/*---------------------------------------------------------------------------*/
+
+static void
+PathPdfRect(
+    Tcl_Obj *list,
+    TkPointsContext_ *context,
+    double x, double y, double width, double height)
+{
+    context->current[0] = context->lastMove[0] = x;
+    context->current[1] = context->lastMove[1] = y;
+    TkPathPdfNumber(list, 3, x, " ");
+    TkPathPdfNumber(list, 3, y, " ");
+    TkPathPdfNumber(list, 3, width, " ");
+    TkPathPdfNumber(list, 3, height, " re\n");
+}
+
+/*---------------------------------------------------------------------------*/
+
+MODULE_SCOPE Tcl_Obj *
+TkPathExtGS(
+    Tk_PathStyle *stylePtr,
+    long *smaskRef)
+{
+    Tcl_Obj *obj;
+    char smaskBuf[128], cabuf[TCL_DOUBLE_SPACE*2], CAbuf[TCL_DOUBLE_SPACE*2];
+    double ca = 1.0, CA = 1.0;
+
+    if (smaskRef != NULL) {
+	sprintf(smaskBuf, "\n/AIS false\n/SMask %ld 0 R", *smaskRef);
+    } else {
+	ca = stylePtr->fillOpacity;
+	if (ca < 0.0) {
+	    ca = 0.0;
+	} else if (ca > 1.0) {
+	    ca = 1.0;
+	}
+	CA = stylePtr->strokeOpacity;
+	if (CA < 0.0) {
+	    CA = 0.0;
+	} else if (CA > 1.0) {
+	    CA = 1.0;
+	}
+    }
+    if ((ca >= 1.0) && (CA >= 1.0) && (smaskBuf[0] == '\0')) {
+	return NULL;
+    }
+    PrintNumber(CAbuf, 3, CA);
+    PrintNumber(cabuf, 3, ca);
+    obj = Tcl_NewObj();
+    Tcl_AppendPrintfToObj(obj, "<<\n/Type /ExtGState\n"
+			  "/BM /Normal\n/CA %s\n/ca %s%s\n>>",
+			  CAbuf, cabuf, (smaskRef != NULL) ? smaskBuf : "");
+    return obj;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static int
+PathPdfGradFuncType2(
+    Tcl_Interp *interp,
+    Tcl_Obj *mkobj,
+    int isAlpha,
+    GradientStop *stop0,
+    GradientStop *stop1)
+{
+    Tcl_Obj *cmd, *obj = Tcl_NewObj();
+
+    if (isAlpha) {
+	Tcl_AppendToObj(obj, "<<\n/Domain [0 1]\n"
+			"/FunctionType 2\n/N 1\n/C0 [", -1);
+	TkPathPdfNumber(obj, 3, stop0->opacity, "]\n/C1 [");
+	TkPathPdfNumber(obj, 3, stop1->opacity, "]\n>>");
+    } else {
+	Tcl_AppendToObj(obj, "<<\n/Domain [0 1]\n"
+			"/FunctionType 2\n/N 1\n/C0 [", -1);
+	TkPathPdfNumber(obj, 3, (stop0->color->red >> 8) / 255.0, " ");
+	TkPathPdfNumber(obj, 3, (stop0->color->green >> 8) / 255.0, " ");
+	TkPathPdfNumber(obj, 3, (stop0->color->blue >> 8) / 255.0,
+			"]\n/C1 [");
+	TkPathPdfNumber(obj, 3, (stop1->color->red >> 8) / 255.0, " ");
+	TkPathPdfNumber(obj, 3, (stop1->color->green >> 8) / 255.0, " ");
+	TkPathPdfNumber(obj, 3, (stop1->color->blue >> 8) / 255.0,
+			"]\n>>");
+    }
+    cmd = Tcl_DuplicateObj(mkobj);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_DecrRefCount(cmd);
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static int
+PathPdfGradSoftMask(
+    Tcl_Interp *interp,
+    Tcl_Obj *mkobj,
+    PathRect *bbox,
+    const char *gradName,
+    long gradId,
+    TMatrix *tmPtr)
+{
+    Tcl_Obj *cmd, *obj = Tcl_NewObj();
+    long id;
+    char fillBbox[128];
+    PathRect r;
+
+    /* form XObject with softmask */
+    sprintf(fillBbox, "/%s sh", gradName);
+    obj = Tcl_NewObj();
+    r = *bbox;
+    if (tmPtr != NULL) {
+	r.x2 -= r.x1;
+	r.x1 = 0;
+	r.y2 -= r.y1;
+	r.y1 = 0;
+    }
+    Tcl_AppendToObj(obj, "<<\n/Type /XObject\n/Subtype /Form\n"
+		    "/BBox [", -1);
+    TkPathPdfNumber(obj, 3, r.x1, " ");
+    TkPathPdfNumber(obj, 3, r.y1, " ");
+    TkPathPdfNumber(obj, 3, r.x2, " ");
+    TkPathPdfNumber(obj, 3, r.y2, "]\n");
+    Tcl_AppendPrintfToObj(obj, "/Length %d\n"
+			  "/Group << /S /Transparency /CS /DeviceGray "
+			  "/I true /K false >>\n/Resources <<\n"
+			  "/Shading << /%s %ld 0 R >>\n"
+			  ">>\n>>\nstream\n", (int) strlen(fillBbox),
+			  gradName, gradId);
+    Tcl_AppendPrintfToObj(obj, "%s\nendstream", fillBbox);
+    cmd = Tcl_DuplicateObj(mkobj);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    /* softmask for ExtGS */
+    obj = Tcl_NewObj();
+    Tcl_AppendPrintfToObj(obj, "<<\n/Type /Mask\n"
+			  "/S /Luminosity\n/G %ld 0 R\n>>", id);
+    cmd = Tcl_DuplicateObj(mkobj);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_DecrRefCount(cmd);
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static int
+PathPdfGradient(
+    Tcl_Interp *interp,
+    int isAlpha,
+    Tcl_Obj *mkobj,
+    Tcl_Obj *mkgrad,
+    PathRect *bboxPtr,
+    TkPathGradientMaster *gradientPtr,
+    char **gradName,
+    long *gradId,
+    TMatrix *tmPtr)
+{
+    Tcl_Size retc, code;
+    Tcl_Obj **retv;
+
+    if (tmPtr != NULL) {
+	tmPtr->a = tmPtr->d = 1.0;
+	tmPtr->b = tmPtr->c = 0.0;
+	tmPtr->tx = tmPtr->ty = 0.0;
+    }
+    *gradName = NULL;
+    /* prepare shading/pattern/function for gradient */
+    if (!ObjectIsEmpty(gradientPtr->stopsObj)) {
+	if (gradientPtr->type == kPathGradientTypeLinear) {
+	    code = PathPdfLinearGradient(interp, isAlpha, mkobj, mkgrad,
+					 bboxPtr, &gradientPtr->linearFill,
+					 gradientPtr->matrixPtr);
+	} else {
+	    code = PathPdfRadialGradient(interp, isAlpha, mkobj, mkgrad,
+					 bboxPtr, &gradientPtr->radialFill,
+					 gradientPtr->matrixPtr, tmPtr);
+	}
+	if (code != TCL_OK) {
+	    return (code == TCL_BREAK) ? TCL_OK : TCL_ERROR;
+	}
+
+	/*
+	 * Get name of shading/pattern/function for gradient
+	 */
+	if (Tcl_ListObjGetElements(interp, Tcl_GetObjResult(interp),
+				   &retc, &retv) != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	if (retc < 2) {
+	    Tcl_SetResult(interp, (char *) "missing PDF id/name",
+			  TCL_STATIC);
+	    return TCL_ERROR;
+	}
+	if (gradId != NULL) {
+	    *gradId = 0;
+	    Tcl_GetLongFromObj(NULL, retv[0], gradId);
+	}
+	*gradName = Tcl_GetString(retv[1]);
+    }
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static int
+PathPdfLinearGradient(
+    Tcl_Interp *interp,
+    int isAlpha,
+    Tcl_Obj *mkobj,
+    Tcl_Obj *mkgrad,
+    PathRect *bbox,
+    LinearGradientFill *fillPtr,
+    TMatrix *mPtr)
+{
+    PathRect *tPtr = fillPtr->transitionPtr;
+    double x1, y1, x2, y2;
+    GradientStop *stop0, *stop1;
+    long id;
+    Tcl_Obj *obj, *cmd;
+
+    if (isAlpha) {
+	int i;
+
+	for (i = 0; i < fillPtr->stopArrPtr->nstops; i++) {
+	    if (fillPtr->stopArrPtr->stops[i]->opacity < 1.0) {
+		break;
+	    }
+	}
+	if (i >= fillPtr->stopArrPtr->nstops) {
+	    /* nothing to do */
+	    return TCL_BREAK;
+	}
+    }
+
+    /*
+     * We need to do like this since this is how SVG defines gradient drawing
+     * in case the transition vector is in relative coordinates.
+     */
+    if (fillPtr->units == kPathGradientUnitsBoundingBox) {
+        double x = bbox->x1;
+        double y = bbox->y1;
+	double width = bbox->x2 - bbox->x1;
+	double height = bbox->y2 - bbox->y1;
+
+        x1 = x + tPtr->x1 * width;
+        y1 = y + tPtr->y1 * height;
+        x2 = x + tPtr->x2 * width;
+        y2 = y + tPtr->y2 * height;
+    } else {
+        x1 = tPtr->x1;
+        y1 = tPtr->y1;
+        x2 = tPtr->x2;
+        y2 = tPtr->y2;
+    }
+    if (fillPtr->stopArrPtr->nstops < 2) {
+	Tcl_SetResult(interp, (char *) "need two or more stops "
+		      "for linear gradient", TCL_STATIC);
+	return TCL_ERROR;
+    }
+    if (fillPtr->stopArrPtr->nstops == 2) {
+	stop0 = fillPtr->stopArrPtr->stops[0];
+	stop1 = fillPtr->stopArrPtr->stops[1];
+	if (PathPdfGradFuncType2(interp, mkobj, isAlpha, stop0, stop1)
+	    != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    } else {
+	int i;
+	Tcl_DString stitchF, enc, bounds;
+	char buffer[64];
+
+	Tcl_DStringInit(&stitchF);
+	Tcl_DStringInit(&enc);
+	Tcl_DStringInit(&bounds);
+	for (i = 1; i < fillPtr->stopArrPtr->nstops; i++) {
+	    stop0 = fillPtr->stopArrPtr->stops[i - 1];
+	    stop1 = fillPtr->stopArrPtr->stops[i];
+	    if (PathPdfGradFuncType2(interp, mkobj, isAlpha, stop0, stop1)
+		!= TCL_OK) {
+		Tcl_DStringFree(&stitchF);
+		Tcl_DStringFree(&enc);
+		Tcl_DStringFree(&bounds);
+		return TCL_ERROR;
+	    }
+	    Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+	    sprintf(buffer, "%s%ld 0 R", (i > 1) ? " " : "", id);
+	    Tcl_DStringAppend(&stitchF, buffer, -1);
+	    sprintf(buffer, "%s0 1", (i > 1) ? " " : "");
+	    Tcl_DStringAppend(&enc, buffer, -1);
+	    if (i > 1) {
+		Tcl_DStringAppend(&bounds, " ", 1);
+	    }
+	    PrintNumber(buffer, 3, stop1->offset);
+	    Tcl_DStringAppend(&bounds, buffer, -1);
+	}
+	stop1 = fillPtr->stopArrPtr->stops[fillPtr->stopArrPtr->nstops - 1];
+	if (PathPdfGradFuncType2(interp, mkobj, isAlpha, stop1, stop1)
+	    != TCL_OK) {
+	    Tcl_DStringFree(&stitchF);
+	    Tcl_DStringFree(&enc);
+	    Tcl_DStringFree(&bounds);
+	    return TCL_ERROR;
+	}
+	Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+	sprintf(buffer, "%s%ld 0 R", (i > 1) ? " " : "", id);
+	Tcl_DStringAppend(&stitchF, buffer, -1);
+	sprintf(buffer, "%s0 1", (i > 1) ? " " : "");
+	Tcl_DStringAppend(&enc, buffer, -1);
+	obj = Tcl_NewObj();
+	Tcl_AppendPrintfToObj(obj, "<<\n/Domain [0 1]\n"
+			      "/FunctionType 3\n/Bounds [%s]\n"
+			      "/Functions [%s]\n/Encode [%s]\n>>",
+			      Tcl_DStringValue(&bounds),
+			      Tcl_DStringValue(&stitchF),
+			      Tcl_DStringValue(&enc));
+	Tcl_DStringFree(&stitchF);
+	Tcl_DStringFree(&enc);
+	Tcl_DStringFree(&bounds);
+	cmd = Tcl_DuplicateObj(mkobj);
+	Tcl_IncrRefCount(cmd);
+	if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	    Tcl_DecrRefCount(cmd);
+	    Tcl_DecrRefCount(obj);
+	    return TCL_ERROR;
+	}
+	if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	    Tcl_DecrRefCount(cmd);
+	    return TCL_ERROR;
+	}
+	Tcl_DecrRefCount(cmd);
+	Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    }
+    obj = Tcl_NewObj();
+    Tcl_AppendToObj(obj, "<<\n/ShadingType 2\n/Extend [true true]\n"
+		    "/Coords [", -1);
+    TkPathPdfNumber(obj, 3, x1, " ");
+    TkPathPdfNumber(obj, 3, y1, " ");
+    TkPathPdfNumber(obj, 3, x2, " ");
+    TkPathPdfNumber(obj, 3, y2, "]\n");
+    Tcl_AppendPrintfToObj(obj, "/ColorSpace %s\n/Function %ld 0 R\n>>",
+ 			  isAlpha ? "/DeviceGray" : "/DeviceRGB", id);
+    cmd = Tcl_DuplicateObj(mkobj);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_DecrRefCount(cmd);
+    Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    cmd = Tcl_DuplicateObj(mkgrad);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, Tcl_NewLongObj(id))
+	!= TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_DecrRefCount(cmd);
+    return TCL_OK;
+}
+
+/*---------------------------------------------------------------------------*/
+
+static int
+PathPdfRadialGradient(
+    Tcl_Interp *interp,
+    int isAlpha,
+    Tcl_Obj *mkobj,
+    Tcl_Obj *mkgrad,
+    PathRect *bbox,
+    RadialGradientFill *fillPtr,
+    TMatrix *mPtr,
+    TMatrix *tmPtr)
+{
+    RadialTransition *tPtr = fillPtr->radialPtr;
+    double centerX, centerY, radiusX, radiusY, focalX, focalY, width, height;
+    GradientStop *stop0, *stop1;
+    long id;
+    Tcl_Obj *obj, *cmd;
+
+    if (isAlpha) {
+	int i;
+
+	for (i = 0; i < fillPtr->stopArrPtr->nstops; i++) {
+	    if (fillPtr->stopArrPtr->stops[i]->opacity < 1.0) {
+		break;
+	    }
+	}
+	if (i >= fillPtr->stopArrPtr->nstops) {
+	    /* nothing to do */
+	    return TCL_BREAK;
+	}
+    }
+    width = bbox->x2 - bbox->x1;
+    height = bbox->y2 - bbox->y1;
+
+    /*
+     * We need to do like this since this is how SVG defines gradient drawing
+     * in case the transition vector is in relative coordinates.
+     */
+    if (fillPtr->units == kPathGradientUnitsBoundingBox) {
+	centerX = width * tPtr->centerX;
+	centerY = height * tPtr->centerY;
+	radiusX = width * tPtr->radius;
+	radiusY = height * tPtr->radius;
+	focalX = width * tPtr->focalX;
+	focalY = height * tPtr->focalY;
+	if (tmPtr == NULL) {
+	    centerX += bbox->x1;
+	    centerY += bbox->y1;
+	    focalX += bbox->x1;
+	    focalY += bbox->y1;
+	}
+    } else {
+	centerX = tPtr->centerX;
+	centerY = tPtr->centerY;
+	radiusX = tPtr->radius;
+	radiusY = tPtr->radius;
+	focalX = tPtr->focalX;
+	focalY = tPtr->focalY;
+    }
+    (void) radiusY; /* To avoid gcc unused warning but preserve for future mods */
+    if (tmPtr != NULL) {
+	tmPtr->tx = bbox->x1;
+	tmPtr->ty = bbox->y1;
+	tmPtr->b = tmPtr->c = 0.0;
+	if (width > height) {
+	    tmPtr->a = 1.0;
+	    tmPtr->d = height / width;
+	    centerY /= tmPtr->d;
+	    focalY /= tmPtr->d;
+	} else {
+	    tmPtr->a = width / height;
+	    tmPtr->d = 1.0;
+	    centerX /= tmPtr->a;
+	    focalX /= tmPtr->a;
+	}
+    }
+    if (fillPtr->stopArrPtr->nstops < 2) {
+	Tcl_SetResult(interp, (char *) "need two or more stops "
+		      "for radial gradient", TCL_STATIC);
+	return TCL_ERROR;
+    }
+    if (fillPtr->stopArrPtr->nstops == 2) {
+	stop0 = fillPtr->stopArrPtr->stops[0];
+	stop1 = fillPtr->stopArrPtr->stops[fillPtr->stopArrPtr->nstops - 1];
+	if (PathPdfGradFuncType2(interp, mkobj, isAlpha, stop0, stop1)
+	    != TCL_OK) {
+	    return TCL_ERROR;
+	}
+	Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    } else {
+	int i;
+	Tcl_DString stitchF, enc, bounds;
+	char buffer[64];
+
+	Tcl_DStringInit(&stitchF);
+	Tcl_DStringInit(&enc);
+	Tcl_DStringInit(&bounds);
+	for (i = 1; i < fillPtr->stopArrPtr->nstops; i++) {
+	    stop0 = fillPtr->stopArrPtr->stops[i - 1];
+	    stop1 = fillPtr->stopArrPtr->stops[i];
+	    if (PathPdfGradFuncType2(interp, mkobj, isAlpha, stop0, stop1)
+		!= TCL_OK) {
+		Tcl_DStringFree(&stitchF);
+		Tcl_DStringFree(&enc);
+		Tcl_DStringFree(&bounds);
+		return TCL_ERROR;
+	    }
+	    Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+	    sprintf(buffer, "%s%ld 0 R", (i > 1) ? " " : "", id);
+	    Tcl_DStringAppend(&stitchF, buffer, -1);
+	    sprintf(buffer, "%s0 1", (i > 1) ? " " : "");
+	    Tcl_DStringAppend(&enc, buffer, -1);
+	    if (i > 1) {
+		Tcl_DStringAppend(&bounds, " ", 1);
+	    }
+	    PrintNumber(buffer, 3, stop1->offset);
+	    Tcl_DStringAppend(&bounds, buffer, -1);
+	}
+	stop1 = fillPtr->stopArrPtr->stops[fillPtr->stopArrPtr->nstops - 1];
+	if (PathPdfGradFuncType2(interp, mkobj, isAlpha, stop1, stop1)
+	    != TCL_OK) {
+	    Tcl_DStringFree(&stitchF);
+	    Tcl_DStringFree(&enc);
+	    Tcl_DStringFree(&bounds);
+	    return TCL_ERROR;
+	}
+	Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+	sprintf(buffer, "%s%ld 0 R", (i > 1) ? " " : "", id);
+	Tcl_DStringAppend(&stitchF, buffer, -1);
+	sprintf(buffer, "%s0 1", (i > 1) ? " " : "");
+	Tcl_DStringAppend(&enc, buffer, -1);
+	obj = Tcl_NewObj();
+	Tcl_AppendPrintfToObj(obj, "<<\n/Domain [0 1]\n"
+			      "/FunctionType 3\n/Bounds [%s]\n"
+			      "/Functions [%s]\n/Encode [%s]\n>>",
+			      Tcl_DStringValue(&bounds),
+			      Tcl_DStringValue(&stitchF),
+			      Tcl_DStringValue(&enc));
+	Tcl_DStringFree(&stitchF);
+	Tcl_DStringFree(&enc);
+	Tcl_DStringFree(&bounds);
+	cmd = Tcl_DuplicateObj(mkobj);
+	Tcl_IncrRefCount(cmd);
+	if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	    Tcl_DecrRefCount(cmd);
+	    Tcl_DecrRefCount(obj);
+	    return TCL_ERROR;
+	}
+	if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	    Tcl_DecrRefCount(cmd);
+	    return TCL_ERROR;
+	}
+	Tcl_DecrRefCount(cmd);
+	Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    }
+    obj = Tcl_NewObj();
+    Tcl_AppendToObj(obj, "<<\n/ShadingType 3\n/Extend [true true]\n"
+		    "/Coords [", -1);
+    TkPathPdfNumber(obj, 3, focalX, " ");
+    TkPathPdfNumber(obj, 3, focalY, " 0 ");
+    TkPathPdfNumber(obj, 3, centerX, " ");
+    TkPathPdfNumber(obj, 3, centerY, " ");
+    TkPathPdfNumber(obj, 3, radiusX, "]\n");
+    Tcl_AppendPrintfToObj(obj, "/ColorSpace %s\n/Function %ld 0 R\n>>",
+			  isAlpha ? "/DeviceGray" : "/DeviceRGB", id);
+    cmd = Tcl_DuplicateObj(mkobj);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, obj) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_DecrRefCount(cmd);
+    Tcl_GetLongFromObj(NULL, Tcl_GetObjResult(interp), &id);
+    cmd = Tcl_DuplicateObj(mkgrad);
+    Tcl_IncrRefCount(cmd);
+    if (Tcl_ListObjAppendElement(interp, cmd, Tcl_NewLongObj(id))
+	!= TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	Tcl_DecrRefCount(obj);
+	return TCL_ERROR;
+    }
+    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+	Tcl_DecrRefCount(cmd);
+	return TCL_ERROR;
+    }
+    Tcl_DecrRefCount(cmd);
+    return TCL_OK;
+}
+
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

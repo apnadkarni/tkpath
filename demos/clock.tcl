@@ -42,7 +42,7 @@ namespace eval ::clock {
 	if {[winfo exists $w]} {
 	    after 1000 [list clock::ticker [expr [incr secs] % 60]]
 	    set phi [expr $secs*2.0*3.14159/60.0]
-	    set m [::tkp::transform rotate $phi 200 200]
+	    set m [::tkp::matrix rotate $phi 200 200]
 	    $w itemconfig pointer -m $m
 	}
     }

@@ -4,7 +4,6 @@
  *		This file includes stuff from tk.h which we need
  *		in a modified form and to make the tkp::canvas self contained.
  *
- * $Id$
  */
 
 #ifndef INCLUDED_TKP_H
@@ -20,7 +19,16 @@
 extern "C" {
 #endif
 
-/* 
+/*
+ * Used to tag functions that are only to be visible within the module being
+ * built and not outside it (where this is supported by the linker).
+ */
+
+#ifndef MODULE_SCOPE
+#define MODULE_SCOPE extern
+#endif
+
+/*
  * Tk_PathCanvas_ is just a dummy which is never defined anywhere.
  * This happens to work because Tk_PathCanvas is a pointer.
  * Its reason is to hide the internals of TkPathCanvas to item code.
@@ -43,13 +51,13 @@ typedef enum {
 
 
 typedef struct Tk_PathSmoothMethod {
-    char *name;
-    int (*coordProc) _ANSI_ARGS_((Tk_PathCanvas canvas,
+    const char *name;
+    int (*coordProc)(Tk_PathCanvas canvas,
 		double *pointPtr, int numPoints, int numSteps,
-		XPoint xPoints[], double dblPoints[]));
-    void (*postscriptProc) _ANSI_ARGS_((Tcl_Interp *interp,
+		XPoint xPoints[], double dblPoints[]);
+    void (*postscriptProc)(Tcl_Interp *interp,
 		Tk_PathCanvas canvas, double *coordPtr,
-		int numPoints, int numSteps));
+		int numPoints, int numSteps);
 } Tk_PathSmoothMethod;
 
 /*
@@ -83,17 +91,17 @@ typedef struct Tk_PathItem {
 				 * Later items in list are drawn on
 				 * top of earlier ones. */
     struct Tk_PathItem *prevPtr;/* Previous sibling in display list of this group. */
-    struct Tk_PathItem *parentPtr;  
+    struct Tk_PathItem *parentPtr;
 				/* Parent of item or NULL if root. */
-    struct Tk_PathItem *firstChildPtr;  
+    struct Tk_PathItem *firstChildPtr;
 				/* First child item, only for groups. */
-    struct Tk_PathItem *lastChildPtr;	
+    struct Tk_PathItem *lastChildPtr;
 				/* Last child item, only for groups. */
     Tcl_Obj *parentObj;		/*   */
     Tk_PathTags *pathTagsPtr;	/* Allocated struct for storing tags.
 				 * This is needed by the custom option handling. */
 
-//#ifdef USE_OLD_CODE
+#ifdef USE_OLD_CODE
     Tk_Uid staticTagSpace[TK_PATHTAG_SPACE];
 				/* Built-in space for limited # of tags. */
     Tk_Uid *tagPtr;		/* Pointer to array of tags. Usually points to
@@ -103,7 +111,7 @@ typedef struct Tk_PathItem {
 				 * tagPtr. */
     int numTags;		/* Number of tag slots actually used at
 				 * *tagPtr. */
-//#endif
+#endif
 
     struct Tk_PathItemType *typePtr;/* Table of procedures that implement this
 				 * type of item. */
@@ -113,10 +121,10 @@ typedef struct Tk_PathItem {
 				 * item. Item area includes x1 and y1 but not
 				 * x2 and y2. */
     Tk_PathState state;		/* State of item. */
-    PathRect bbox;	    /* Bounding box with zero width outline.
-                             * Untransformed coordinates. */
-    PathRect totalBbox;	    /* Bounding box including stroke.
-                             * Untransformed coordinates. */
+    PathRect bbox;	        /* Bounding box with zero width outline.
+                                 * Untransformed coordinates. */
+    PathRect totalBbox;	        /* Bounding box including stroke.
+                                 * Untransformed coordinates. */
     char *reserved1;		/* reserved for future use */
     int redraw_flags;		/* Some flags used in the canvas */
 
@@ -149,14 +157,14 @@ typedef struct Tk_PathItem {
  */
 
 typedef int	Tk_PathItemCreateProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int argc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[]);
 typedef int	Tk_PathItemConfigureProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int argc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int flags);
 typedef int	Tk_PathItemCoordProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int argc,
-		    Tcl_Obj *const argv[]);
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
+		    Tcl_Obj *const objv[]);
 typedef void	Tk_PathItemDeleteProc(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 typedef void	Tk_PathItemDisplayProc(Tk_PathCanvas canvas,
@@ -168,13 +176,20 @@ typedef double	Tk_PathItemPointProc(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *pointPtr);
 typedef int	Tk_PathItemAreaProc(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
+#ifndef TKP_NO_POSTSCRIPT
 typedef int	Tk_PathItemPostscriptProc(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
+#endif
+typedef int	Tk_PathItemPdfProc(Tcl_Interp *interp,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
+		    Tcl_Obj *const objv[], int prepass);
 typedef void	Tk_PathItemScaleProc(Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, double originX, double originY,
+		    Tk_PathItem *itemPtr, int compensate,
+		    double originX, double originY,
 		    double scaleX, double scaleY);
 typedef void	Tk_PathItemTranslateProc(Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, double deltaX, double deltaY);
+		    Tk_PathItem *itemPtr, int compensate,
+		    double deltaX, double deltaY);
 typedef int	Tk_PathItemIndexProc(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, char *indexString,
 		    int *indexPtr);
@@ -191,7 +206,7 @@ typedef void	Tk_PathItemDCharsProc(Tk_PathCanvas canvas,
 #ifndef __NO_OLD_CONFIG
 
 typedef struct Tk_PathItemType {
-    char *name;			/* The name of this type of item, such as
+    const char *name;		/* The name of this type of item, such as
 				 * "line". */
     int itemSize;		/* Total amount of space needed for item's
 				 * record. */
@@ -221,11 +236,16 @@ typedef struct Tk_PathItemType {
     Tk_PathItemPointProc *pointProc;
 				/* Computes distance from item to a given
 				 * point. */
-    Tk_PathItemAreaProc *areaProc;	
+    Tk_PathItemAreaProc *areaProc;
 				/* Computes whether item is inside, outside,
 				 * or overlapping an area. */
+#ifndef TKP_NO_POSTSCRIPT
     Tk_PathItemPostscriptProc *postscriptProc;
 				/* Procedure to write a Postscript description
+				 * for items of this type. */
+#endif
+    Tk_PathItemPdfProc *pdfProc;
+				/* Procedure to write a Pdf description
 				 * for items of this type. */
     Tk_PathItemScaleProc *scaleProc;/* Procedure to rescale items of this type. */
     Tk_PathItemTranslateProc *translateProc;
@@ -334,9 +354,9 @@ typedef struct Tk_PathOutline {
     Tk_Dash *activeDashPtr;	/* Dash pattern if state is active. */
     Tk_Dash *disabledDashPtr;	/* Dash pattern if state is disabled. */
 
-    VOID *reserved1;		/* Reserved for future expansion. */
-    VOID *reserved2;
-    VOID *reserved3;
+    void *reserved1;		/* Reserved for future expansion. */
+    void *reserved2;
+    void *reserved3;
     Tk_TSOffset *tsoffsetPtr;	/* Stipple offset for outline. */
     XColor *color;		/* Outline color. */
     XColor *activeColor;	/* Outline color if state is active. */
@@ -352,71 +372,102 @@ typedef struct Tk_PathOutline {
 /*
  * Functions normally in the tk stubs table.
  */
- 
+
 /* From tkpCanvUtil.c */
 
-Tk_Window	Tk_PathCanvasTkwin(Tk_PathCanvas canvas);
-void		Tk_CreatePathItemType(Tk_PathItemType *typePtr);
-void		Tk_PathCreateSmoothMethod(Tcl_Interp * interp, 
-			    Tk_PathSmoothMethod * method);   
-int		Tk_PathConfigOutlineGC(XGCValues *gcValues, Tk_PathCanvas canvas,
+MODULE_SCOPE Tk_Window	Tk_PathCanvasTkwin(Tk_PathCanvas canvas);
+MODULE_SCOPE void	Tk_CreatePathItemType(Tk_PathItemType *typePtr);
+MODULE_SCOPE void	Tk_PathCreateSmoothMethod(Tcl_Interp * interp,
+			    Tk_PathSmoothMethod * method);
+MODULE_SCOPE int	Tk_PathConfigOutlineGC(XGCValues *gcValues,
+			    Tk_PathCanvas canvas,
 			    Tk_PathItem *item, Tk_PathOutline *outline);
-int		Tk_PathChangeOutlineGC(Tk_PathCanvas canvas, Tk_PathItem *item,
-			    Tk_PathOutline *outline);
-int		Tk_PathResetOutlineGC(Tk_PathCanvas canvas, Tk_PathItem *item,
-			    Tk_PathOutline *outline);
-int		Tk_PathCanvasPsOutline(Tk_PathCanvas canvas, Tk_PathItem *item,
-			    Tk_PathOutline *outline);
-void		Tk_PathCanvasDrawableCoords(Tk_PathCanvas canvas,
-			    double x, double y, short *drawableXPtr, short *drawableYPtr);
-void		Tk_PathCanvasWindowCoords(Tk_PathCanvas canvas,
-			    double x, double y, short *screenXPtr, short *screenYPtr);
-int		Tk_PathCanvasGetCoord(Tcl_Interp *interp, Tk_PathCanvas canvas,
-			    CONST char *string, double *doublePtr);
-int		Tk_PathCanvasGetCoordFromObj(Tcl_Interp *interp, Tk_PathCanvas canvas,
+MODULE_SCOPE int	Tk_PathChangeOutlineGC(Tk_PathCanvas canvas,
+			    Tk_PathItem *item, Tk_PathOutline *outline);
+MODULE_SCOPE int	Tk_PathResetOutlineGC(Tk_PathCanvas canvas,
+			    Tk_PathItem *item, Tk_PathOutline *outline);
+MODULE_SCOPE int	Tk_PathCanvasPsOutline(Tk_PathCanvas canvas,
+			    Tk_PathItem *item, Tk_PathOutline *outline);
+MODULE_SCOPE void	Tk_PathCanvasDrawableCoords(Tk_PathCanvas canvas,
+			    double x, double y, short *drawableXPtr,
+			    short *drawableYPtr);
+MODULE_SCOPE void	Tk_PathCanvasWindowCoords(Tk_PathCanvas canvas,
+			    double x, double y, short *screenXPtr,
+			    short *screenYPtr);
+MODULE_SCOPE int	Tk_PathCanvasGetCoord(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas,
+			    const char *string, double *doublePtr);
+MODULE_SCOPE int	Tk_PathCanvasGetCoordFromObj(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas,
 			    Tcl_Obj *obj, double *doublePtr);
-void		Tk_PathCanvasSetStippleOrigin(Tk_PathCanvas canvas, GC gc);
-void		Tk_PathCanvasSetOffset(Tk_PathCanvas canvas, GC gc, Tk_TSOffset *offset);
-Tk_PathCanvasTextInfo *	Tk_PathCanvasGetTextInfo(Tk_PathCanvas canvas);
-int		Tk_PathCanvasTagsParseProc( ClientData clientData, Tcl_Interp *interp,
-			    Tk_Window tkwin, CONST char *value, char *widgRec, int offset);
-char *		Tk_PathCanvasTagsPrintProc(ClientData clientData, Tk_Window tkwin,
-			    char *widgRec, int offset, Tcl_FreeProc **freeProcPtr);
-void		Tk_PathCreateSmoothMethod(Tcl_Interp *interp, Tk_PathSmoothMethod *smooth);
-void		Tk_PathCreateOutline(Tk_PathOutline *outline);
-void		Tk_PathDeleteOutline(Display *display, Tk_PathOutline *outline);
-    
-int		Tk_PathCanvasTagsOptionSetProc(ClientData clientData, Tcl_Interp *interp,
+MODULE_SCOPE void	Tk_PathCanvasSetStippleOrigin(Tk_PathCanvas canvas,
+			    GC gc);
+MODULE_SCOPE void	Tk_PathCanvasSetOffset(Tk_PathCanvas canvas, GC gc,
+			    Tk_TSOffset *offset);
+MODULE_SCOPE Tk_PathCanvasTextInfo *
+			Tk_PathCanvasGetTextInfo(Tk_PathCanvas canvas);
+#ifdef USE_OLD_CODE
+MODULE_SCOPE int	Tk_PathCanvasTagsParseProc(ClientData clientData,
+			    Tcl_Interp *interp,
+			    Tk_Window tkwin, const char *value, char *widgRec,
+			    int offset);
+MODULE_SCOPE char *	Tk_PathCanvasTagsPrintProc(ClientData clientData,
+			    Tk_Window tkwin,
+			    char *widgRec, int offset,
+			    Tcl_FreeProc **freeProcPtr);
+#endif
+MODULE_SCOPE void	Tk_PathCreateSmoothMethod(Tcl_Interp *interp,
+			    Tk_PathSmoothMethod *smooth);
+MODULE_SCOPE void	Tk_PathCreateOutline(Tk_PathOutline *outline);
+MODULE_SCOPE void	Tk_PathDeleteOutline(Display *display,
+			    Tk_PathOutline *outline);
+
+MODULE_SCOPE int	Tk_PathCanvasTagsOptionSetProc(ClientData clientData,
+			    Tcl_Interp *interp,
 			    Tk_Window tkwin, Tcl_Obj **value, char *recordPtr,
-			    int internalOffset, char *oldInternalPtr, int flags);
-Tcl_Obj *	Tk_PathCanvasTagsOptionGetProc(ClientData clientData, Tk_Window tkwin,
-			    char *recordPtr, int internalOffset);
-void		Tk_PathCanvasTagsOptionRestoreProc(ClientData clientData,
-			    Tk_Window tkwin, char *internalPtr, char *oldInternalPtr);
-void		Tk_PathCanvasTagsOptionFreeProc(ClientData clientData,
+			    Tcl_Size internalOffset, char *oldInternalPtr,
+			    int flags);
+MODULE_SCOPE Tcl_Obj *	Tk_PathCanvasTagsOptionGetProc(ClientData clientData,
+			    Tk_Window tkwin,
+			    char *recordPtr, Tcl_Size internalOffset);
+MODULE_SCOPE void	Tk_PathCanvasTagsOptionRestoreProc(ClientData clientData,
+			    Tk_Window tkwin, char *internalPtr,
+			    char *oldInternalPtr);
+MODULE_SCOPE void	Tk_PathCanvasTagsOptionFreeProc(ClientData clientData,
 			    Tk_Window tkwin, char *internalPtr);
-    
+
 /* From tkpCanvas.c */
 
-void		Tk_PathCanvasEventuallyRedraw(Tk_PathCanvas canvas,
+MODULE_SCOPE void	Tk_PathCanvasEventuallyRedraw(Tk_PathCanvas canvas,
 			    int x1, int y1, int x2, int y2);
-int		Tk_PathCanvasPsColor(Tcl_Interp *interp, Tk_PathCanvas canvas,
-			    XColor *colorPtr);
-int		Tk_PathCanvasPsFont(Tcl_Interp *interp, Tk_PathCanvas canvas,
-			    Tk_Font tkfont);
-int		Tk_PathCanvasPsBitmap(Tcl_Interp *interp, Tk_PathCanvas canvas,
-			    Pixmap bitmap, int startX, int startY, int width, int height);
-int		Tk_PathCanvasPsStipple(Tcl_Interp *interp, Tk_PathCanvas canvas,
-			    Pixmap bitmap);
-double		Tk_PathCanvasPsY(Tk_PathCanvas canvas, double y);
-void		Tk_PathCanvasPsPath(Tcl_Interp *interp, Tk_PathCanvas canvas,
+MODULE_SCOPE int	Tk_PathCanvasPsColor(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, XColor *colorPtr);
+MODULE_SCOPE int	Tk_PathCanvasPsFont(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Tk_Font tkfont);
+MODULE_SCOPE int	Tk_PathCanvasPsBitmap(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Pixmap bitmap,
+			    int startX, int startY, int width, int height);
+MODULE_SCOPE int	Tk_PathCanvasPsStipple(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Pixmap bitmap);
+MODULE_SCOPE double	Tk_PathCanvasPsY(Tk_PathCanvas canvas, double y);
+MODULE_SCOPE void	Tk_PathCanvasPsPath(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas,
 			    double *coordPtr, int numPoints);
-
-
+MODULE_SCOPE int	Tk_PathCanvasPdfColor(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, XColor *colorPtr);
+MODULE_SCOPE int	Tk_PathCanvasPdfFont(Tcl_Interp *interp,
+			    Tk_PathCanvas canvas, Tk_Font tkfont);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif		// end INCLUDED_TKP_H
-
+#endif		/* INCLUDED_TKP_H */
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

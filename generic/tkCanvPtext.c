@@ -6,7 +6,6 @@
  *
  * Copyright (c) 2007-2008  Mats Bengtsson
  *
- * $Id$
  */
 
 #include "tkIntPath.h"
@@ -14,19 +13,16 @@
 #include "tkCanvPathUtil.h"
 #include "tkPathStyle.h"
 
-/* For debugging. */
-extern Tcl_Interp *gInterp;
-
 /*
  * The structure below defines the record for each path item.
  */
 
 typedef struct PtextItem  {
-    Tk_PathItemEx headerEx; /* Generic stuff that's the same for all
-                             * path types.  MUST BE FIRST IN STRUCTURE. */
+    Tk_PathItemEx headerEx;	/* Generic stuff that's the same for all
+				 * path types.  MUST BE FIRST IN STRUCTURE. */
     Tk_PathTextStyle textStyle;
     int textAnchor;
-    int fillOverStroke;    /* boolean parameter */
+    int fillOverStroke;		/* boolean parameter */
     double x;
     double y;
     double baseHeightRatio;
@@ -36,18 +32,17 @@ typedef struct PtextItem  {
     void *custom;		/* Place holder for platform dependent stuff. */
 } PtextItem;
 
-
 /*
  * Prototypes for procedures defined in this file:
  */
 
 static void	ComputePtextBbox(Tk_PathCanvas canvas, PtextItem *ptextPtr);
-static int	ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-		    Tk_PathItem *itemPtr, int objc,
-		    Tcl_Obj *CONST objv[], int flags);
+static int	ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
+		    Tcl_Obj *const objv[], int flags);
 static int	CreatePtext(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *CONST objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePtext(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPtext(Tk_PathCanvas canvas,
@@ -56,35 +51,50 @@ static void	DisplayPtext(Tk_PathCanvas canvas,
 static void	PtextBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask);
 static int	PtextCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *CONST objv[]);
-static int	ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-			Tk_PathItem *itemPtr, int objc, Tcl_Obj *CONST objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
+static int	ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas,
+		    Tk_PathItem *itemPtr, Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PtextToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
+static int	PtextToPdf(Tcl_Interp *interp,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
+		    Tcl_Obj *const objv[], int prepass);
 static double	PtextToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
+#ifndef TKP_NO_POSTSCRIPT
 static int	PtextToPostscript(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
-static void	ScalePtext(Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, double originX, double originY,
+#endif
+static void	ScalePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+		    int compensate, double originX, double originY,
 		    double scaleX, double scaleY);
-static void	TranslatePtext(Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, double deltaX, double deltaY);
+static void	TranslatePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+		    int compensate, double deltaX, double deltaY);
 #if 0
-static void	PtextDeleteChars(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, 
+static void	PtextDeleteChars(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 		    int first, int last);
 #endif
+static int	drawptext(Tcl_Interp *interp, PtextItem *ptextPtr,
+		    Tcl_Obj *ret, Tcl_Obj *cmdl);
+static char *	linebreak(char *str, char **nextp);
 
 enum {
-    PRECT_OPTION_INDEX_FONTFAMILY	    = (1L << (PATH_STYLE_OPTION_INDEX_END + 0)),
-    PRECT_OPTION_INDEX_FONTSIZE		    = (1L << (PATH_STYLE_OPTION_INDEX_END + 1)),
-    PRECT_OPTION_INDEX_TEXT		    = (1L << (PATH_STYLE_OPTION_INDEX_END + 2)),
-    PRECT_OPTION_INDEX_TEXTANCHOR	    = (1L << (PATH_STYLE_OPTION_INDEX_END + 3)),
-    PRECT_OPTION_INDEX_FONTWEIGHT       = (1L << (PATH_STYLE_OPTION_INDEX_END + 4)),
-    PRECT_OPTION_INDEX_FONTSLANT        = (1L << (PATH_STYLE_OPTION_INDEX_END + 5)),
-    PRECT_OPTION_INDEX_FILLOVERSTROKE  = (1L << (PATH_STYLE_OPTION_INDEX_END + 6)),
+    PRECT_OPTION_INDEX_FONTFAMILY =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 0)),
+    PRECT_OPTION_INDEX_FONTSIZE =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 1)),
+    PRECT_OPTION_INDEX_TEXT =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 2)),
+    PRECT_OPTION_INDEX_TEXTANCHOR =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 3)),
+    PRECT_OPTION_INDEX_FONTWEIGHT =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 4)),
+    PRECT_OPTION_INDEX_FONTSLANT =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 5)),
+    PRECT_OPTION_INDEX_FILLOVERSTROKE =
+	(1L << (PATH_STYLE_OPTION_INDEX_END + 6)),
 };
- 
+
 PATH_STYLE_CUSTOM_OPTION_RECORDS
 PATH_CUSTOM_OPTION_TAGS
 PATH_OPTION_STRING_TABLES_FILL
@@ -92,12 +102,12 @@ PATH_OPTION_STRING_TABLES_STROKE
 PATH_OPTION_STRING_TABLES_STATE
 
 /*
- * Best would be to extract font information from the named font "TkDefaultFont"
- * but the option defaults need static strings. Perhaps using NULL
- * and extracting family and size dynamically?
+ * Best would be to extract font information from the named font
+ * "TkDefaultFont" but the option defaults need static strings.
+ * Perhaps using NULL and extracting family and size dynamically?
  */
-#if defined(__WIN32__) || defined(_WIN32) || \
-    defined(__CYGWIN__) || defined(__MINGW32__)
+#if (defined(__WIN32__) || defined(_WIN32) || \
+    defined(__CYGWIN__) || defined(__MINGW32__)) && !defined(PLATFORM_SDL)
 #   define DEF_PATHCANVTEXT_FONTFAMILY 		"Tahoma"
 #   define DEF_PATHCANVTEXT_FONTSIZE 		"8"
 #else
@@ -115,53 +125,57 @@ PATH_OPTION_STRING_TABLES_STATE
 /*
  * The enum kPathTextAnchorStart... MUST be kept in sync!
  */
-static char *textAnchorST[] = {
-    "start", "middle", "end", "n", "w", "s", "e", "nw", "ne", "sw", "se", "c", NULL
+static const char *textAnchorST[] = {
+    "start", "middle", "end", "n", "w", "s", "e",
+    "nw", "ne", "sw", "se", "c", NULL
 };
 
-static char *fontWeightST[] = {
+static const char *fontWeightST[] = {
     "normal", "bold", NULL
 };
 
-static char *fontSlantST[] = {
+static const char *fontSlantST[] = {
     "normal", "italic", "oblique", NULL
 };
 
-#define PATH_OPTION_SPEC_FONTFAMILY		    \
-    {TK_OPTION_STRING, "-fontfamily", NULL, NULL,   \
-        DEF_PATHCANVTEXT_FONTFAMILY, -1, Tk_Offset(PtextItem, textStyle.fontFamily),   \
-	0, 0, PRECT_OPTION_INDEX_FONTFAMILY}
+#define PATH_OPTION_SPEC_FONTFAMILY				\
+    {TK_OPTION_STRING, "-fontfamily", NULL, NULL,		\
+	    DEF_PATHCANVTEXT_FONTFAMILY, -1,			\
+	    offsetof(PtextItem, textStyle.fontFamily),		\
+	    0, 0, PRECT_OPTION_INDEX_FONTFAMILY}
 
-#define PATH_OPTION_SPEC_FONTSIZE		    \
-    {TK_OPTION_DOUBLE, "-fontsize", NULL, NULL,   \
-        DEF_PATHCANVTEXT_FONTSIZE, -1, Tk_Offset(PtextItem, textStyle.fontSize),   \
-	0, 0, PRECT_OPTION_INDEX_FONTSIZE}
+#define PATH_OPTION_SPEC_FONTSIZE				\
+    {TK_OPTION_DOUBLE, "-fontsize", NULL, NULL,			\
+	    DEF_PATHCANVTEXT_FONTSIZE, -1,			\
+	    offsetof(PtextItem, textStyle.fontSize),		\
+	    0, 0, PRECT_OPTION_INDEX_FONTSIZE}
 
-#define PATH_OPTION_SPEC_TEXT		    \
-    {TK_OPTION_STRING, "-text", NULL, NULL,   \
-        NULL, Tk_Offset(PtextItem, utf8Obj), -1,  \
-	TK_OPTION_NULL_OK, 0, PRECT_OPTION_INDEX_TEXT}
-	
-#define PATH_OPTION_SPEC_TEXTANCHOR		    \
-    {TK_OPTION_STRING_TABLE, "-textanchor", NULL, NULL, \
-        "start", -1, Tk_Offset(PtextItem, textAnchor),	\
-        0, (ClientData) textAnchorST, 0}
+#define PATH_OPTION_SPEC_TEXT					\
+    {TK_OPTION_STRING, "-text", NULL, NULL,			\
+	    NULL, offsetof(PtextItem, utf8Obj), -1,		\
+	    TK_OPTION_NULL_OK, 0, PRECT_OPTION_INDEX_TEXT}
 
-#define PATH_OPTION_SPEC_FONTWEIGHT           \
-    {TK_OPTION_STRING_TABLE, "-fontweight", NULL, NULL,   \
-        DEF_PATHCANVTEXT_FONTWEIGHT, -1, Tk_Offset(PtextItem, textStyle.fontWeight),   \
-    0, (ClientData) fontWeightST, PRECT_OPTION_INDEX_FONTWEIGHT}
+#define PATH_OPTION_SPEC_TEXTANCHOR				\
+    {TK_OPTION_STRING_TABLE, "-textanchor", NULL, NULL,		\
+	    "start", -1, offsetof(PtextItem, textAnchor),	\
+	    0, (ClientData) textAnchorST, 0}
 
-#define PATH_OPTION_SPEC_FONTSLANT           \
-    {TK_OPTION_STRING_TABLE, "-fontslant", NULL, NULL,   \
-        DEF_PATHCANVTEXT_FONTSLANT, -1, Tk_Offset(PtextItem, textStyle.fontSlant),   \
-    0, (ClientData) fontSlantST, PRECT_OPTION_INDEX_FONTSLANT}
+#define PATH_OPTION_SPEC_FONTWEIGHT				\
+    {TK_OPTION_STRING_TABLE, "-fontweight", NULL, NULL,		\
+	    DEF_PATHCANVTEXT_FONTWEIGHT, -1,			\
+	    offsetof(PtextItem, textStyle.fontWeight),		\
+	    0, (ClientData) fontWeightST, PRECT_OPTION_INDEX_FONTWEIGHT}
 
-#define PATH_OPTION_SPEC_FILLOVERSTROKE           \
-    {TK_OPTION_BOOLEAN, "-filloverstroke", NULL, NULL,   \
-        0, -1, Tk_Offset(PtextItem, fillOverStroke),   \
-    0, 0, PRECT_OPTION_INDEX_FILLOVERSTROKE}
+#define PATH_OPTION_SPEC_FONTSLANT				\
+    {TK_OPTION_STRING_TABLE, "-fontslant", NULL, NULL,		\
+	    DEF_PATHCANVTEXT_FONTSLANT, -1,			\
+	    offsetof(PtextItem, textStyle.fontSlant),		\
+	    0, (ClientData) fontSlantST, PRECT_OPTION_INDEX_FONTSLANT}
 
+#define PATH_OPTION_SPEC_FILLOVERSTROKE				\
+    {TK_OPTION_BOOLEAN, "-filloverstroke", NULL, NULL,		\
+	    0, -1, offsetof(PtextItem, fillOverStroke),	\
+	    0, 0, PRECT_OPTION_INDEX_FILLOVERSTROKE}
 
 static Tk_OptionSpec optionSpecs[] = {
     PATH_OPTION_SPEC_CORE(Tk_PathItemEx),
@@ -178,8 +192,6 @@ static Tk_OptionSpec optionSpecs[] = {
     PATH_OPTION_SPEC_FILLOVERSTROKE,
     PATH_OPTION_SPEC_END
 };
-
-static Tk_OptionTable optionTable = NULL;
 
 /*
  * The structures below defines the 'prect' item type by means
@@ -199,7 +211,10 @@ Tk_PathItemType tkPtextType = {
     PtextBbox,				/* bboxProc */
     PtextToPoint,			/* pointProc */
     PtextToArea,			/* areaProc */
+#ifndef TKP_NO_POSTSCRIPT
     PtextToPostscript,			/* postscriptProc */
+#endif
+    PtextToPdf,				/* pdfProc */
     ScalePtext,				/* scaleProc */
     TranslatePtext,			/* translateProc */
     (Tk_PathItemIndexProc *) NULL,	/* indexProc */
@@ -209,16 +224,16 @@ Tk_PathItemType tkPtextType = {
     (Tk_PathItemDCharsProc *) NULL,	/* dTextProc */
     (Tk_PathItemType *) NULL,		/* nextPtr */
 };
-                         
 
-static int		
-CreatePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-	struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *CONST objv[])
+static int
+CreatePtext(Tcl_Interp *interp, Tk_PathCanvas canvas,
+    struct Tk_PathItem *itemPtr,
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ptextPtr->headerEx;
-    int	i;
+    Tcl_Size	i;
+    Tk_OptionTable optionTable;
 
     if (objc == 0) {
         Tcl_Panic("canvas did not pass any coords\n");
@@ -242,12 +257,10 @@ CreatePtext(Tcl_Interp *interp, Tk_PathCanvas canvas,
     ptextPtr->textStyle.fontSize = 0.0;
     ptextPtr->fillOverStroke = 0;
     ptextPtr->custom = NULL;
-    
-    if (optionTable == NULL) {
-	optionTable = Tk_CreateOptionTable(interp, optionSpecs);
-    } 
+
+    optionTable = Tk_CreateOptionTable(interp, optionSpecs);
     itemPtr->optionTable = optionTable;
-    if (Tk_InitOptions(interp, (char *) ptextPtr, optionTable, 
+    if (Tk_InitOptions(interp, (char *) ptextPtr, optionTable,
 	    Tk_PathCanvasTkwin(canvas)) != TCL_OK) {
         goto error;
     }
@@ -276,8 +289,10 @@ error:
 }
 
 static int
-ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, 
-        int objc, Tcl_Obj *CONST objv[])
+ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas,
+    Tk_PathItem *itemPtr,
+    Tcl_Size objc,
+    Tcl_Obj *const objv[])
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
 
@@ -294,27 +309,24 @@ ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPt
                     (Tcl_Obj ***) &objv) != TCL_OK) {
                 return TCL_ERROR;
             } else if (objc != 2) {
-                Tcl_SetObjResult(interp, 
-			Tcl_NewStringObj("wrong # coordinates: expected 0 or 2", -1));
-                return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
             }
         }
-        if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &ptextPtr->x) != TCL_OK)
-            || (Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[1], &ptextPtr->y) != TCL_OK)) {
+        if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0],
+					  &ptextPtr->x) != TCL_OK) ||
+	    (Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[1],
+					  &ptextPtr->y) != TCL_OK)) {
             return TCL_ERROR;
         }
     } else {
-        Tcl_SetObjResult(interp, 
-		Tcl_NewStringObj("wrong # coordinates: expected 0 or 2", -1));
-        return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
     }
     return TCL_OK;
 }
 
-
-static int		
-PtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, 
-        int objc, Tcl_Obj *CONST objv[])
+static int
+PtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     int result;
@@ -333,28 +345,29 @@ ComputePtextBbox(Tk_PathCanvas canvas, PtextItem *ptextPtr)
     Tk_PathItem *itemPtr = &itemExPtr->header;
     Tk_PathStyle style;
     Tk_PathState state = itemExPtr->header.state;
+    Tk_Window tkwin = Tk_PathCanvasTkwin(canvas);
     double width;
     double height;
     double bheight;
     PathRect bbox, r;
 
-    if(state == TK_PATHSTATE_NULL) {
+    if (state == TK_PATHSTATE_NULL) {
 	state = TkPathCanvasState(canvas);
     }
-    if (ptextPtr->utf8Obj == NULL || (state == TK_PATHSTATE_HIDDEN)) {
+    if ((ptextPtr->utf8Obj == NULL) || (state == TK_PATHSTATE_HIDDEN)) {
         itemExPtr->header.x1 = itemExPtr->header.x2 =
         itemExPtr->header.y1 = itemExPtr->header.y2 = -1;
         return;
     }
     style = TkPathCanvasInheritStyle(itemPtr, kPathMergeStyleNotFill);
-    r = TkPathTextMeasureBbox(&ptextPtr->textStyle, 
+    r = TkPathTextMeasureBbox(Tk_Display(tkwin), &ptextPtr->textStyle,
 	    Tcl_GetString(ptextPtr->utf8Obj), ptextPtr->custom);
     width = r.x2 - r.x1;
     height = r.y2 - r.y1;
     bheight = -r.y1;
 
     switch (ptextPtr->textAnchor) {
-        case kPathTextAnchorStart: 
+        case kPathTextAnchorStart:
         case kPathTextAnchorW:
         case kPathTextAnchorNW:
         case kPathTextAnchorSW:
@@ -383,7 +396,7 @@ ComputePtextBbox(Tk_PathCanvas canvas, PtextItem *ptextPtr)
         case kPathTextAnchorStart:
         case kPathTextAnchorMiddle:
         case kPathTextAnchorEnd:
-            bbox.y1 = ptextPtr->y + r.y1;   // r.y1 is negative!
+            bbox.y1 = ptextPtr->y + r.y1;   /* r.y1 is negative! */
             bbox.y2 = ptextPtr->y + r.y2;
             break;
         case kPathTextAnchorN:
@@ -426,20 +439,19 @@ ComputePtextBbox(Tk_PathCanvas canvas, PtextItem *ptextPtr)
     }
     itemPtr->bbox = bbox;
     ptextPtr->baseHeightRatio = bheight / height;
-    itemPtr->totalBbox = itemPtr->bbox;    //FIXME
+    itemPtr->totalBbox = itemPtr->bbox;    /* FIXME */
     SetGenericPathHeaderBbox(&itemExPtr->header, style.matrixPtr, &bbox);
     TkPathCanvasFreeInheritedStyle(&style);
 }
 
-static int		
-ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, 
-        int objc, Tcl_Obj *CONST objv[], int flags)
+static int
+ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ptextPtr->headerEx;
     Tk_PathStyle *stylePtr = &itemExPtr->style;
     Tk_Window tkwin;
-    //Tk_PathState state;
     Tk_SavedOptions savedOptions;
     Tcl_Obj *errorResult = NULL;
     int error, mask;
@@ -447,7 +459,7 @@ ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
     tkwin = Tk_PathCanvasTkwin(canvas);
     for (error = 0; error <= 1; error++) {
 	if (!error) {
-	    if (Tk_SetOptions(interp, (char *) ptextPtr, optionTable, 
+	    if (Tk_SetOptions(interp, (char *) ptextPtr, itemPtr->optionTable,
 		    objc, objv, tkwin, &savedOptions, &mask) != TCL_OK) {
 		continue;
 	    }
@@ -455,21 +467,29 @@ ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 	    errorResult = Tcl_GetObjResult(interp);
 	    Tcl_IncrRefCount(errorResult);
 	    Tk_RestoreSavedOptions(&savedOptions);
-	}	
-	
+	}
+
 	/*
 	 * Since we have -fill default equal to black we need to force
 	 * setting the fill member of the style.
 	 */
-	if (TkPathCanvasItemExConfigure(interp, canvas, itemExPtr, mask | PATH_STYLE_OPTION_FILL) != TCL_OK) {
+	if (TkPathCanvasItemExConfigure(interp, canvas, itemExPtr,
+					mask | PATH_STYLE_OPTION_FILL)
+	    != TCL_OK) {
 	    continue;
 	}
-	// @@@ TkPathTextConfig needs to be reworked!
+	/* @@@ TkPathTextConfig needs to be reworked! */
 	if (ptextPtr->utf8Obj != NULL) {
-	    if (TkPathTextConfig(interp, &(ptextPtr->textStyle), 
-		    Tcl_GetString(ptextPtr->utf8Obj), &ptextPtr->custom) != TCL_OK) {
+	    void *custom = NULL;
+
+	    if (TkPathTextConfig(interp, &ptextPtr->textStyle,
+		    Tcl_GetString(ptextPtr->utf8Obj), &custom) != TCL_OK) {
 		continue;
 	    }
+	    if (ptextPtr->custom != NULL) {
+		TkPathTextFree(&ptextPtr->textStyle, ptextPtr->custom);
+	    }
+	    ptextPtr->custom = custom;
 	}
 
 	/*
@@ -481,25 +501,16 @@ ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 	Tk_FreeSavedOptions(&savedOptions);
 	stylePtr->mask |= mask;
     }
-    
+
     stylePtr->strokeOpacity = MAX(0.0, MIN(1.0, stylePtr->strokeOpacity));
     if (ptextPtr->utf8Obj != NULL) {
         ptextPtr->numBytes = Tcl_GetCharLength(ptextPtr->utf8Obj);
-        ptextPtr->numChars = Tcl_NumUtfChars(Tcl_GetString(ptextPtr->utf8Obj), 
+        ptextPtr->numChars = Tcl_NumUtfChars(Tcl_GetString(ptextPtr->utf8Obj),
 		ptextPtr->numBytes);
     } else {
         ptextPtr->numBytes = 0;
         ptextPtr->numChars = 0;
     }
-#if 0	    // From old code. Needed?
-    state = itemPtr->state;
-    if (state == TK_PATHSTATE_NULL) {
-	state = TkPathCanvasState(canvas);
-    }
-    if (state == TK_PATHSTATE_HIDDEN) {
-        return TCL_OK;
-    }
-#endif
     if (error) {
 	Tcl_SetObjResult(interp, errorResult);
 	Tcl_DecrRefCount(errorResult);
@@ -510,7 +521,7 @@ ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
     }
 }
 
-static void		
+static void
 DeletePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
@@ -523,29 +534,26 @@ DeletePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display)
     if (itemExPtr->styleInst != NULL) {
 	TkPathFreeStyle(itemExPtr->styleInst);
     }
-    TkPathTextFree(&(ptextPtr->textStyle), ptextPtr->custom);
-    Tk_FreeConfigOptions((char *) ptextPtr, optionTable, 
+    TkPathTextFree(&ptextPtr->textStyle, ptextPtr->custom);
+    ptextPtr->custom = NULL;
+    Tk_FreeConfigOptions((char *) ptextPtr, itemPtr->optionTable,
 	    Tk_PathCanvasTkwin(canvas));
 }
 
-static void		
-DisplayPtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display, Drawable drawable,
-        int x, int y, int width, int height)
+static void
+DisplayPtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display,
+    Drawable drawable, int x, int y, int width, int height)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ptextPtr->headerEx;
     Tk_PathStyle style;
     TMatrix m = GetCanvasTMatrix(canvas);
     TkPathContext ctx;
-    
-    /* === EB - 23-apr-2010: register coordinate offsets */
-    TkPathSetCoordOffsets(m.tx, m.ty);
-    /* === */
-    
+
     if (ptextPtr->utf8Obj == NULL) {
         return;
     }
-    
+
     /*
      * The defaults for -fill and -stroke differ for the ptext item.
      */
@@ -556,35 +564,37 @@ DisplayPtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display, Drawa
     if (!(style.mask & PATH_STYLE_OPTION_STROKE)) {
 	style.strokeColor = itemExPtr->style.strokeColor;
     }
-    
+
     ctx = TkPathInit(Tk_PathCanvasTkwin(canvas), drawable);
-    
     TkPathPushTMatrix(ctx, &m);
     if (style.matrixPtr != NULL) {
         TkPathPushTMatrix(ctx, style.matrixPtr);
     }
     TkPathBeginPath(ctx, &style);
     /* @@@ We need to handle gradients as well here!
-           Wait to see what the other APIs have to say.
-    */
-    TkPathTextDraw(ctx, &style, &ptextPtr->textStyle, itemPtr->bbox.x1, itemPtr->bbox.y1 + ptextPtr->baseHeightRatio * (itemPtr->bbox.y2 - itemPtr->bbox.y1),
-            ptextPtr->fillOverStroke, Tcl_GetString(ptextPtr->utf8Obj), ptextPtr->custom);
+     *     Wait to see what the other APIs have to say.
+     */
+    TkPathTextDraw(ctx, &style, &ptextPtr->textStyle,
+		   itemPtr->bbox.x1,
+		   itemPtr->bbox.y1 + ptextPtr->baseHeightRatio *
+		   (itemPtr->bbox.y2 - itemPtr->bbox.y1),
+		   ptextPtr->fillOverStroke,
+		   Tcl_GetString(ptextPtr->utf8Obj), ptextPtr->custom);
     TkPathEndPath(ctx);
     TkPathFree(ctx);
     TkPathCanvasFreeInheritedStyle(&style);
 }
 
-static void	
+static void
 PtextBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     ComputePtextBbox(canvas, ptextPtr);
 }
 
-static double	
+static double
 PtextToPoint(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *pointPtr)
 {
-    PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathStyle style;
     double dist;
 
@@ -595,54 +605,314 @@ PtextToPoint(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *pointPtr)
     return dist;
 }
 
-static int		
+static int
 PtextToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 {
-    PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathStyle style;
     int area;
-    
-    style = TkPathCanvasInheritStyle(itemPtr, 
+
+    style = TkPathCanvasInheritStyle(itemPtr,
 	    kPathMergeStyleNotFill | kPathMergeStyleNotStroke);
     area = PathRectToAreaWithMatrix(itemPtr->bbox, style.matrixPtr, areaPtr);
     TkPathCanvasFreeInheritedStyle(&style);
     return area;
 }
 
-static int		
-PtextToPostscript(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass)
+/* From tkUnixCairoPath.c */
+static char *
+linebreak(char *str, char **nextp)
+{
+    char *ret;
+
+    if (str == NULL) {
+        str = *nextp;
+    }
+    str += strspn(str, "\r\n");
+    if (*str == '\0') {
+        return NULL;
+    }
+    ret = str;
+    str += strcspn(str, "\r\n");
+    if (*str) {
+        int ch = *str;
+
+        *str++ = '\0';
+        if ((ch == '\r') && (*str == '\n')) {
+            str++;
+	}
+    }
+    *nextp = str;
+    return ret;
+}
+
+static int
+drawptext(Tcl_Interp *interp, PtextItem *ptextPtr, Tcl_Obj *ret, Tcl_Obj *cmdl)
+{
+    char *utf8, *token, *savep;
+    Tcl_DString ds;
+    Tcl_Size i;
+    int result = TCL_OK;
+
+    savep = Tcl_GetStringFromObj(ptextPtr->utf8Obj, &i);
+    utf8 = (char *) ckalloc((unsigned) i + 1);
+    strcpy(utf8, savep);
+    Tcl_DStringInit(&ds);
+    for (token = linebreak(utf8, &savep); token != NULL;
+	 token = linebreak(NULL, &savep)) {
+	if (cmdl != NULL) {
+	    Tcl_Obj *cmd;
+
+	    /*
+	     * Use provided callback for formatting/encoding text.
+	     */
+	    cmd = Tcl_DuplicateObj(cmdl);
+	    Tcl_IncrRefCount(cmd);
+	    if (Tcl_ListObjAppendElement(interp, cmd,
+			Tcl_NewStringObj(token, strlen(token))) != TCL_OK) {
+		Tcl_DecrRefCount(cmd);
+		result = TCL_ERROR;
+		break;
+	    }		
+	    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+		Tcl_DecrRefCount(cmd);
+		result = TCL_ERROR;
+		break;
+	    }
+	    Tcl_DecrRefCount(cmd);
+	    Tcl_AppendToObj(ret, "(", 1);
+	    Tcl_AppendObjToObj(ret, Tcl_GetObjResult(interp));
+	    Tcl_AppendToObj(ret, ") Tj\nT*\n", 8);
+	} else {
+	    Tcl_DStringSetLength(&ds, 0);
+	    Tcl_DStringAppend(&ds, "(", 1);
+	    i = 0;
+	    while (token[i] != '\0') {
+		switch (token[i]) {
+		case '(':
+		case ')':
+		case '\\':
+		    Tcl_DStringAppend(&ds, "\\", 1);
+		default:
+		    if ((token[i] < 0) || (token[i] >= ' ')) {
+			Tcl_DStringAppend(&ds, token + i, 1);
+		    } else {
+			char obuf[8];
+
+			sprintf(obuf, "\\%03o", token[i]);
+			Tcl_DStringAppend(&ds, obuf, -1);
+		    }
+		    break;
+		case '\n':
+		    Tcl_DStringAppend(&ds, "\\n", 2);
+		    break;
+		case '\r':
+		    Tcl_DStringAppend(&ds, "\\r", 2);
+		    break;
+		case '\t':
+		    Tcl_DStringAppend(&ds, "\\t", 2);
+		    break;
+		case '\b':
+		    Tcl_DStringAppend(&ds, "\\b", 2);
+		    break;
+		case '\f':
+		    Tcl_DStringAppend(&ds, "\\f", 2);
+		    break;
+		}
+		i++;
+	    }
+	    Tcl_DStringAppend(&ds, ") Tj\nT*\n", -1);
+	    Tcl_AppendToObj(ret, Tcl_DStringValue(&ds), Tcl_DStringLength(&ds));
+	}
+    }
+    Tcl_DStringFree(&ds);
+    ckfree(utf8);
+    return result;
+}
+
+static int
+PtextToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
+{
+    Tk_PathStyle style;
+    PtextItem *ptextPtr = (PtextItem *) itemPtr;
+    Tcl_Obj *ret, *cmdl;
+    TMatrix matrix = { 1., 0., 0., 1., 0., 0. };
+    TMatrix tmp = {1., 0., 0., -1., 0., 0. };
+    Tk_PathState state = itemPtr->state;
+    PathRect bbox = itemPtr->bbox;
+    int hasStroke;
+    char *font;
+    int result = TCL_OK;
+
+    if (state == TK_PATHSTATE_NULL) {
+	state = TkPathCanvasState(canvas);
+    }
+    if ((ptextPtr->utf8Obj == NULL) || (state == TK_PATHSTATE_HIDDEN)) {
+	return result;
+    }
+    ret = Tcl_NewObj();
+    style = TkPathCanvasInheritStyle(itemPtr, kPathMergeStyleNotFill);
+    if (style.matrixPtr != NULL) {
+	matrix = *(style.matrixPtr);
+    }
+    tmp.tx = bbox.x1; /* value with anchoring applied */
+    tmp.ty = ptextPtr->y; /* TODO */
+    MMulTMatrix(&tmp, &matrix);
+    /*
+     * The defaults for -fill and -stroke differ for the ptext item.
+     */
+    if (!(style.mask & PATH_STYLE_OPTION_FILL)) {
+	style.fill = ptextPtr->headerEx.style.fill;
+    } else if (GetGradientMasterFromPathColor(style.fill) != NULL) {
+	style.fill = NULL;
+    }
+    if (!(style.mask & PATH_STYLE_OPTION_STROKE)) {
+	style.strokeColor = ptextPtr->headerEx.style.strokeColor;
+    }
+    if (objc > 0) {
+	Tcl_Size retc;
+	Tcl_Obj *gs, *cmd, **retv;
+
+	gs = TkPathExtGS(&style, NULL);
+	if (gs != NULL) {
+	    cmd = Tcl_DuplicateObj(objv[0]);
+	    Tcl_IncrRefCount(cmd);
+	    if (Tcl_ListObjAppendElement(interp, cmd, gs) != TCL_OK) {
+		Tcl_DecrRefCount(cmd);
+		Tcl_DecrRefCount(gs);
+		result = TCL_ERROR;
+		goto done;
+	    }		
+	    if (Tcl_EvalObjEx(interp, cmd, TCL_EVAL_DIRECT) != TCL_OK) {
+		Tcl_DecrRefCount(cmd);
+		result = TCL_ERROR;
+		goto done;
+	    }
+	    Tcl_DecrRefCount(cmd);
+	    /*
+	     * Get name of extended graphics state.
+	     */
+	    if (Tcl_ListObjGetElements(interp, Tcl_GetObjResult(interp),
+				       &retc, &retv) != TCL_OK) {
+		result = TCL_ERROR;
+		goto done;
+	    }
+	    if (retc < 2) {
+		Tcl_SetResult(interp, (char *) "missing PDF id/name",
+			      TCL_STATIC);
+		result = TCL_ERROR;
+		goto done;
+	    }
+	    Tcl_AppendPrintfToObj(ret, "/%s gs\n", Tcl_GetString(retv[1]));
+	}
+    }
+    hasStroke = (style.strokeColor != NULL);
+    cmdl = (objc > 1) ? objv[1] : NULL;
+    font = (objc > 2) ? Tcl_GetString(objv[2]) : ptextPtr->textStyle.fontFamily;
+    /*
+     * TODO: ptextPtr->textStyle.fontSlant ptextPtr->textStyle.fontWeight
+     * TODO: extents+descents
+     */
+    Tcl_AppendPrintfToObj(ret, "q\nBT\n/%s ", font);
+    TkPathPdfNumber(ret, 3, ptextPtr->textStyle.fontSize, " Tf\n");
+    TkPathPdfNumber(ret, 3, ptextPtr->textStyle.fontSize, " TL\n");
+    TkPathPdfNumber(ret, 6, matrix.a, " ");
+    TkPathPdfNumber(ret, 6, matrix.b, " ");
+    TkPathPdfNumber(ret, 6, matrix.c, " ");
+    TkPathPdfNumber(ret, 6, matrix.d, " ");
+    TkPathPdfNumber(ret, 3, matrix.tx, " ");
+    TkPathPdfNumber(ret, 3, matrix.ty, " Tm\n");
+    if (ptextPtr->fillOverStroke && hasStroke &&
+	(style.fill != NULL) && (style.fill->color != NULL)) {
+	/* first pass w/o fill */
+	TkPathPdfColor(ret, style.strokeColor, "RG");
+	Tcl_AppendToObj(ret, "1 Tr\n", 5);
+	TkPathPdfNumber(ret, 3, style.strokeWidth, " w\n");
+	result = drawptext(interp, ptextPtr, ret, cmdl);
+	if (result == TCL_OK) {
+	    /* second pass w/o stroke */
+	    Tcl_AppendPrintfToObj(ret, "ET\nQ\nq\nBT\n/%s ", font);
+	    TkPathPdfNumber(ret, 3, ptextPtr->textStyle.fontSize, " Tf\n");
+	    TkPathPdfNumber(ret, 3, ptextPtr->textStyle.fontSize, " TL\n");
+	    TkPathPdfNumber(ret, 6, matrix.a, " ");
+	    TkPathPdfNumber(ret, 6, matrix.b, " ");
+	    TkPathPdfNumber(ret, 6, matrix.c, " ");
+	    TkPathPdfNumber(ret, 6, matrix.d, " ");
+	    TkPathPdfNumber(ret, 3, matrix.tx, " ");
+	    TkPathPdfNumber(ret, 3, matrix.ty, " Tm\n");
+	    TkPathPdfColor(ret, style.fill->color, "rg");
+	    Tcl_AppendToObj(ret, "0 Tr\n", 5);
+	    result = drawptext(interp, ptextPtr, ret, cmdl);
+	}
+    } else if ((style.fill != NULL) && (style.fill->color != NULL)) {
+	TkPathPdfColor(ret, style.fill->color, "rg");
+	if (hasStroke) {
+	    TkPathPdfColor(ret, style.strokeColor, "RG");
+	    Tcl_AppendToObj(ret, "2 Tr\n", 5);
+	    TkPathPdfNumber(ret, 3, style.strokeWidth, " w\n");
+	} else {
+	    Tcl_AppendToObj(ret, "0 Tr\n", 5);
+	}
+	result = drawptext(interp, ptextPtr, ret, cmdl);
+    } else if (hasStroke) {
+	TkPathPdfColor(ret, style.strokeColor, "RG");
+	Tcl_AppendToObj(ret, "1 Tr\n", 5);
+	TkPathPdfNumber(ret, 3, style.strokeWidth, " w\n");
+	result = drawptext(interp, ptextPtr, ret, cmdl);
+    }
+done:
+    TkPathCanvasFreeInheritedStyle(&style);
+    if (result == TCL_OK) {
+	Tcl_AppendToObj(ret, "ET\nQ\n", 5);
+	Tcl_SetObjResult(interp, ret);
+    } else {
+	Tcl_DecrRefCount(ret);
+    }
+    return result;
+}
+
+#ifndef TKP_NO_POSTSCRIPT
+static int
+PtextToPostscript(Tcl_Interp *interp, Tk_PathCanvas canvas,
+    Tk_PathItem *itemPtr, int prepass)
 {
     return TCL_ERROR;
 }
+#endif
 
-static void		
-ScalePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double originX, double originY,
-        double scaleX, double scaleY)
+static void
+ScalePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int compensate,
+    double originX, double originY, double scaleX, double scaleY)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
 
+    CompensateScale(itemPtr, compensate, &originX, &originY, &scaleX, &scaleY);
+
+    ScalePathRect(&itemPtr->bbox, originX, originY, scaleX, scaleY);
     ptextPtr->x = originX + scaleX*(ptextPtr->x - originX);
     ptextPtr->y = originY + scaleY*(ptextPtr->y - originY);
     ScalePathRect(&itemPtr->bbox, originX, originY, scaleX, scaleY);
-    ScalePathRect(&itemPtr->totalBbox, originX, originY, scaleX, scaleY);
     ScaleItemHeader(itemPtr, originX, originY, scaleX, scaleY);
 }
 
-static void		
-TranslatePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double deltaX, double deltaY)
+static void
+TranslatePtext(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    int compensate, double deltaX, double deltaY)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
+
+    CompensateTranslate(itemPtr, compensate, &deltaX, &deltaY);
 
     ptextPtr->x += deltaX;
     ptextPtr->y += deltaY;
     TranslatePathRect(&itemPtr->bbox, deltaX, deltaY);
-    TranslatePathRect(&itemPtr->totalBbox, deltaX, deltaY);
     TranslateItemHeader(itemPtr, deltaX, deltaY);
 }
 
-#if 0	// TODO
+#if 0	/* TODO */
 static void
-PtextDeleteChars(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int first, int last)
+PtextDeleteChars(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+    int first, int last)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     int byteIndex, byteCount, charsRemoved;
@@ -661,8 +931,9 @@ PtextDeleteChars(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int first, int last
     charsRemoved = last + 1 - first;
 
     byteIndex = Tcl_UtfAtIndex(text, first) - text;
-    byteCount = Tcl_UtfAtIndex(text + byteIndex, charsRemoved) - (text + byteIndex);
-    
+    byteCount = Tcl_UtfAtIndex(text + byteIndex, charsRemoved)
+	- (text + byteIndex);
+
     new = (char *) ckalloc((unsigned) (ptextPtr->numBytes + 1 - byteCount));
     memcpy(new, text, (size_t) byteIndex);
     strcpy(new + byteIndex, text + byteIndex + byteCount);
@@ -671,12 +942,20 @@ PtextDeleteChars(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int first, int last
     ptextPtr->utf8 = new;
     ptextPtr->numChars -= charsRemoved;
     ptextPtr->numBytes -= byteCount;
-    
-    //TkPathTextConfig(interp, &(ptextPtr->textStyle), ptextPtr->utf8, &(ptextPtr->custom));
+
+    /* 
+     * TkPathTextConfig(interp, &ptextPtr->textStyle,
+     *                  ptextPtr->utf8, &ptextPtr->custom);
+     */
     ComputePtextBbox(canvas, ptextPtr);
     return;
 }
 #endif
-
-/*----------------------------------------------------------------------*/
-
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */

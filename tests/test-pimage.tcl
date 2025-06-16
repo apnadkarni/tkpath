@@ -1,9 +1,3 @@
-#!/bin/sh
-# start with WISH \
-    exec wish "$0" ${1+"$@"}
-
-
-#
 # Testcase for pimage »move«.
 # ----------------------------------------------------------------
 # Author : Arndt Roger Schneider
@@ -24,9 +18,6 @@ if {[lsearch [namespace children] ::tcltest] == -1} {
 
 # Extend auto_path, that local packages can be used.
 lappend auto_path [file dirname [info script]]
-
-# Load Local Packages ...
-
 
 # prepare the ui.
 toplevel .t
@@ -62,7 +53,6 @@ zSRYPWFeE+b5J9x2QUKZnoI7cidlHnJh8mN6UroIpXlRXsVTJ1KGWSZ3VCq5
 5TFuSOARJhxhASd2HBFCpyV5uIFnndh18kVDIrwkKE9yzeUGFoVGdOhcTZgU
 EAA7LA==} -gamma 1.0
 
-
 # The TestCase itself:
 test pimage-1.1 {move 10 10} {
     set id [.t.c create pimage 100 100 -image _oval]
@@ -75,11 +65,4 @@ test pimage-1.2 {coords 10 10} {
     .t.c coords $id 110.0 110.0
     .t.c coords $id
 } {{110.0 110.0}}
-
-# Local Variables:
-# Coding: utf-8-unix
-# Mode: Tcl
-# End:
-
-
  

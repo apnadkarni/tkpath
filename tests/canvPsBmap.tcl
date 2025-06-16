@@ -1,8 +1,6 @@
 # This file creates a screen to exercise Postscript generation
 # for bitmaps in canvases.  It is part of the Tk visual test suite,
 # which is invoked via the "visual" script.
-#
-# RCS: @(#) $Id$
 
 catch {destroy .t}
 toplevel .t
@@ -71,16 +69,4 @@ $c create bitmap 5.5i 5.5i \
     -bitmap @[file join $canvPsBmapImageDir flagup.xbm] \
     -background {} -foreground black -anchor se
 $c create rect 5.47i 5.47i 5.53i 5.53i -fill {} -outline black
-
-
-
-
-
-
-
-
-
-
-
-
 

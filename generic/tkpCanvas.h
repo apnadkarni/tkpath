@@ -11,7 +11,6 @@
  * See the file "license.terms" for information on usage and redistribution of
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
- * RCS: @(#) $Id$
  */
 
 #ifndef _TKPCANVAS
@@ -227,19 +226,21 @@ typedef struct TkPathCanvas {
 				 * definitions. */
     int nextId;			/* Number to use as id for next item created
 				 * in widget. */
+#ifndef TKP_NO_POSTSCRIPT
     Tk_PostscriptInfo psInfo;	/* Pointer to information used for generating
 				 * Postscript for the canvas. NULL means no
 				 * Postscript is currently being generated. */
+#endif
     Tcl_HashTable idTable;	/* Table of integer indices. */
-// @@@ TODO: as pointers instead???
+/* @@@ TODO: as pointers instead??? */
     Tcl_HashTable styleTable;	/* Table for styles.
 				 * This defines the namespace for style names. */
-    Tcl_HashTable gradientTable;/* Table for gradients. 
+    Tcl_HashTable gradientTable;/* Table for gradients.
 				 * This defines the namespace for gradient names. */
     int styleUid;		/* Running integer used to number style tokens. */
     int gradientUid;		/* Running integer used to number gradient tokens. */
     int tagStyle;
-    
+
     /*
      * Additional information, added by the 'dash'-patch
      */
@@ -311,7 +312,7 @@ typedef struct TkPathCanvas {
  * path based items to allow more generic code to be used for them
  * since all of them (?) anyhow include a Tk_PathStyle record.
  */
- 
+
 typedef struct Tk_PathItemEx  {
     Tk_PathItem header;	    /* Generic stuff that's the same for all
                              * types.  MUST BE FIRST IN STRUCTURE. */
@@ -336,46 +337,62 @@ typedef struct Tk_PathItemEx  {
  * to the outside world:
  */
 
+#ifndef TKP_NO_POSTSCRIPT
 MODULE_SCOPE int	    TkCanvPostscriptCmd(TkPathCanvas *canvasPtr,
-				Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]);
+				Tcl_Interp *interp,
+				int objc, Tcl_Obj *const objv[]);
+#endif
 MODULE_SCOPE int	    TkPathCanvTranslatePath(TkPathCanvas *canvPtr,
 				int numVertex, double *coordPtr, int closed,
 				XPoint *outPtr);
-MODULE_SCOPE Tk_PathTags *  TkPathAllocTagsFromObj(Tcl_Interp *interp, Tcl_Obj *valuePtr);
-MODULE_SCOPE int	    TkPathCanvasFindGroup(Tcl_Interp *interp, Tk_PathCanvas canvas, 
+MODULE_SCOPE Tk_PathTags *  TkPathAllocTagsFromObj(Tcl_Interp *interp,
+				Tcl_Obj *valuePtr);
+MODULE_SCOPE int	    TkPathCanvasFindGroup(Tcl_Interp *interp,
+				Tk_PathCanvas canvas,
 				Tcl_Obj *parentObj, Tk_PathItem **parentPtrPtr);
-MODULE_SCOPE void	    TkPathCanvasSetParent(Tk_PathItem *parentPtr, Tk_PathItem *itemPtr);
+MODULE_SCOPE void	    TkPathCanvasSetParent(Tk_PathItem *parentPtr,
+				Tk_PathItem *itemPtr);
 MODULE_SCOPE int	    TkPathCanvasGetDepth(Tk_PathItem *itemPtr);
-MODULE_SCOPE Tk_PathStyle   TkPathCanvasInheritStyle(Tk_PathItem *itemPtr, long flags);
+MODULE_SCOPE Tk_PathStyle   TkPathCanvasInheritStyle(Tk_PathItem *itemPtr,
+				long flags);
 MODULE_SCOPE TMatrix	    TkPathCanvasInheritTMatrix(Tk_PathItem *itemPtr);
 MODULE_SCOPE void	    TkPathCanvasFreeInheritedStyle(Tk_PathStyle *stylePtr);
 MODULE_SCOPE Tcl_HashTable *TkPathCanvasGradientTable(Tk_PathCanvas canvas);
 MODULE_SCOPE Tcl_HashTable *TkPathCanvasStyleTable(Tk_PathCanvas canvas);
 MODULE_SCOPE Tk_PathState   TkPathCanvasState(Tk_PathCanvas canvas);
 MODULE_SCOPE Tk_PathItem *  TkPathCanvasCurrentItem(Tk_PathCanvas canvas);
-MODULE_SCOPE void	    TkPathCanvasGroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
+MODULE_SCOPE void	    TkPathCanvasGroupBbox(Tk_PathCanvas canvas,
+				Tk_PathItem *itemPtr,
 				int *x1Ptr, int *y1Ptr, int *x2Ptr, int *y2Ptr);
-MODULE_SCOPE void	    TkPathCanvasUpdateGroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr);
+MODULE_SCOPE void	    TkPathCanvasUpdateGroupBbox(Tk_PathCanvas canvas,
+				Tk_PathItem *itemPtr);
 MODULE_SCOPE void	    TkPathCanvasSetGroupDirtyBbox(Tk_PathItem *itemPtr);
 MODULE_SCOPE Tk_PathItem *  TkPathCanvasItemIteratorNext(Tk_PathItem *itemPtr);
 MODULE_SCOPE Tk_PathItem *  TkPathCanvasItemIteratorPrev(Tk_PathItem *itemPtr);
-MODULE_SCOPE int	    TkPathCanvasItemExConfigure(Tcl_Interp *interp, Tk_PathCanvas canvas, 
-				    Tk_PathItemEx *itemExPtr, int mask);
+MODULE_SCOPE int	    TkPathCanvasItemExConfigure(Tcl_Interp *interp,
+				Tk_PathCanvas canvas,
+				Tk_PathItemEx *itemExPtr, int mask);
 MODULE_SCOPE void	    TkPathCanvasItemDetach(Tk_PathItem *itemPtr);
-	
-MODULE_SCOPE void	    GroupItemConfigured(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask);
-MODULE_SCOPE void	    CanvasTranslateGroup(Tk_PathCanvas canvas, 
-				Tk_PathItem *itemPtr, double deltaX, double deltaY);
-MODULE_SCOPE void	    CanvasScaleGroup(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-				double originX, double originY, double scaleX, double scaleY);
-MODULE_SCOPE int	    CanvasGradientObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr, 
-				int objc, Tcl_Obj* CONST objv[]);
-MODULE_SCOPE int	    CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr, 
-				int objc, Tcl_Obj* CONST objv[]);
+MODULE_SCOPE void	    GroupItemConfigured(Tk_PathCanvas canvas,
+				Tk_PathItem *itemPtr, int mask);
+MODULE_SCOPE void	    CanvasTranslateGroup(Tk_PathCanvas canvas,
+				Tk_PathItem *itemPtr, int compensate,
+				double deltaX, double deltaY);
+MODULE_SCOPE void	    CanvasScaleGroup(Tk_PathCanvas canvas,
+				Tk_PathItem *itemPtr, int compensate,
+				double originX, double originY,
+				double scaleX, double scaleY);
+MODULE_SCOPE int	    CanvasGradientObjCmd(Tcl_Interp* interp,
+				TkPathCanvas *canvasPtr,
+				int objc, Tcl_Obj* const objv[]);
+MODULE_SCOPE int	    CanvasStyleObjCmd(Tcl_Interp* interp, TkPathCanvas *canvasPtr,
+				int objc, Tcl_Obj* const objv[]);
 
 MODULE_SCOPE void	    CanvasSetParentToRoot(Tk_PathItem *itemPtr);
-MODULE_SCOPE void	    PathGradientChangedProc(ClientData clientData, int flags);
-MODULE_SCOPE void	    PathStyleChangedProc(ClientData clientData, int flags);
+MODULE_SCOPE void	    PathGradientChangedProc(ClientData clientData,
+				int flags);
+MODULE_SCOPE void	    PathStyleChangedProc(ClientData clientData,
+				int flags);
 
 MODULE_SCOPE void	    CanvasGradientsFree(TkPathCanvas *canvasPtr);
 
@@ -387,10 +404,10 @@ MODULE_SCOPE Tk_PathItemType tkArcType, tkBitmapType, tkImageType, tkLineType;
 MODULE_SCOPE Tk_PathItemType tkOvalType, tkPolygonType;
 MODULE_SCOPE Tk_PathItemType tkRectangleType, tkTextType, tkWindowType;
 
-/* 
+/*
  * tkpath specific item types.
  */
- 
+
 MODULE_SCOPE Tk_PathItemType tkPathType;
 MODULE_SCOPE Tk_PathItemType tkPrectType;
 MODULE_SCOPE Tk_PathItemType tkPlineType;
@@ -403,3 +420,11 @@ MODULE_SCOPE Tk_PathItemType tkPtextType;
 MODULE_SCOPE Tk_PathItemType tkGroupType;
 
 #endif /* _TKPCANVAS */
+
+/*
+ * Local Variables:
+ * mode: c
+ * c-basic-offset: 4
+ * fill-column: 78
+ * End:
+ */
