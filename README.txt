@@ -1,3 +1,7 @@
+NOTE: This is a fork of Mats Bengtsson's original tkpath extension
+for Tcl/Tk 8, with modifications by Steve Shaw (sm-shaw at github) and
+further fixes for Tcl/Tk 9. Tcl/Tk 8 compatibility is not guaranteed.
+Original README is below.
 
                            README for tkpath
                            _________________
@@ -13,7 +17,7 @@ It is only to be used as a fallback when the cairo backend is missing.
 The backends:
 
     1) CoreGraphics for MacOSX, built using ProjectBuilder
- 
+
     2) GDI+ for WinXP, built by VC++7 (.NET), runs also on older system
        using the gdiplus.dll
 
@@ -22,11 +26,11 @@ The backends:
        yourself (and me). It requires a cairo 1.0 installation since
        incompatible API changes appeared before 1.0 (libcairo.so.2 ?).
 
-There used to be two additional backends, GDI and core Tk drawing, but 
+There used to be two additional backends, GDI and core Tk drawing, but
 these have been dropped.
 
 I could think of another backend based on X11 that has more features than
-the compatibility layer of Tk, since the fallback is only necessary on unix 
+the compatibility layer of Tk, since the fallback is only necessary on unix
 systems anyway. Perhaps an OpenGL backend would also be useful, mainly on
 unix systems without cairo support.
 
@@ -37,13 +41,13 @@ There are two important Design Principles:
        option which comprises translate, scale etc. attributes
 
     2) Keep the actual path drawing code separate and independent of any
-       canvas code. 
+       canvas code.
 
 Open Issues:
 
 There are a number of design choices that I'd like to discuss.
 
- o How to provide coordinates for prect? As the standard Tk way (x1,y1,x2,y2), 
+ o How to provide coordinates for prect? As the standard Tk way (x1,y1,x2,y2),
    using sizes (x,y,width,height), or using options (x,y,-width,-height)?
 
  o What shall the precedence of the -style option compared to the individual

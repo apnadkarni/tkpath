@@ -17,8 +17,6 @@
 #endif
 
 /* Keep patch level release numbers odd and set even only on release. */
-#define TKPATH_VERSION    "0.3"
-#define TKPATH_PATCHLEVEL "0.3.3.1"
 #define TKPATH_REQUIRE    "9.0"
 
 MODULE_SCOPE int gAntiAlias;
@@ -147,7 +145,7 @@ int Tkpath_Init(Tcl_Interp *interp)		/* Tcl interpreter. */
      */
     PathStyleInit(interp);
 
-    return Tcl_PkgProvide(interp, "tkpath", TKPATH_PATCHLEVEL);
+    return Tcl_PkgProvide(interp, "tkpath", PACKAGE_VERSION);
 }
 
 /*
