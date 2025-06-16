@@ -2202,6 +2202,7 @@ PathPdfRadialGradient(
 	focalX = tPtr->focalX;
 	focalY = tPtr->focalY;
     }
+    (void) radiusY; /* To avoid gcc unused warning but preserve for future mods */
     if (tmPtr != NULL) {
 	tmPtr->tx = bbox->x1;
 	tmPtr->ty = bbox->y1;

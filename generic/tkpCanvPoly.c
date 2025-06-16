@@ -430,6 +430,7 @@ PolygonCoords(
 	Tcl_SetObjResult(interp,
             Tcl_ObjPrintf("wrong # coordinates: expected an even number, got %"
                           TCL_SIZE_MODIFIER "d", objc));
+        return TCL_ERROR;
     } else {
 	numPoints = objc/2;
 	if (polyPtr->pointsAllocated <= numPoints) {

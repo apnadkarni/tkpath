@@ -22,11 +22,15 @@
 
 const
 TkObjType tkStateKeyObjType = {
-    "statekey",			/* name */
-    NULL,			/* freeIntRepProc */
-    NULL,			/* dupIntRepProc */
-    NULL,			/* updateStringProc */
-    NULL			/* setFromAnyProc */
+    {
+        "statekey",		/* name */
+        NULL,			/* freeIntRepProc */
+        NULL,			/* dupIntRepProc */
+        NULL,			/* updateStringProc */
+        NULL,			/* setFromAnyProc */
+        TCL_OBJTYPE_V0
+    },
+    0
 };
 
 static int

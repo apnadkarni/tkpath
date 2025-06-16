@@ -1199,7 +1199,7 @@ CanvasWidgetCmd(
     }
     case CANV_DEBUGTREE: {
 	Tk_PathItem *walkPtr, *tmpPtr;
-	char tmp[256], info[256];
+	char tmp[512], info[256];
 	const char *s;
 	int depth;
 
@@ -1223,7 +1223,7 @@ CanvasWidgetCmd(
 	    }
 	    info[0] = '\0';
 	    DebugGetItemInfo(walkPtr, info);
-	    sprintf(tmp, "%*d%s\t%s (itemPtr=%p)\n", 4*depth+3, walkPtr->id, s, info, walkPtr);
+	    snprintf(tmp, sizeof(tmp), "%*d%s\t%s (itemPtr=%p)\n", 4*depth+3, walkPtr->id, s, info, walkPtr);
 	    Tcl_WriteChars(Tcl_GetChannel(interp, "stdout", NULL), tmp, -1);
 	}
 	break;

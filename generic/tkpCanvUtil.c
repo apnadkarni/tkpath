@@ -2056,8 +2056,10 @@ TkPathCanvTranslatePath(
     double *a, *b, *t;		/* Pointers to parts of the temporary
 				 * storage */
     int i, j;			/* Loop counters */
+#ifndef NDEBUG
     int maxOutput;		/* Maximum number of outputs that we will
 				 * allow */
+#endif
     double limit[4];		/* Boundries at which clipping occurs */
     double staticSpace[480];	/* Temp space from the stack */
 
@@ -2152,7 +2154,9 @@ TkPathCanvTranslatePath(
      * This is the loop that makes the four passes through the data.
      */
 
+#ifndef NDEBUG
     maxOutput = numVertex*3;
+#endif
     for (j=0; j<4; j++){
 	double xClip = limit[j];
 	int inside = a[0]<xClip;

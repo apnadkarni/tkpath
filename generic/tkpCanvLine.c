@@ -2233,7 +2233,7 @@ LineToPostscript(
 				 * being created. */
 {
     LineItem *linePtr = (LineItem *) itemPtr;
-    char buffer[64 + TCL_INTEGER_SPACE];
+    char buffer[200 + TCL_INTEGER_SPACE];
     const char *style;
 
     double width;
