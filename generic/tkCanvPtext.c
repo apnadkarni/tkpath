@@ -38,11 +38,11 @@ typedef struct PtextItem  {
 
 static void	ComputePtextBbox(Tk_PathCanvas canvas, PtextItem *ptextPtr);
 static int	ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, int objc,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int flags);
 static int	CreatePtext(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePtext(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPtext(Tk_PathCanvas canvas,
@@ -51,13 +51,13 @@ static void	DisplayPtext(Tk_PathCanvas canvas,
 static void	PtextBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask);
 static int	PtextCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PtextToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
 static int	PtextToPdf(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int prepass);
 static double	PtextToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
@@ -228,11 +228,11 @@ Tk_PathItemType tkPtextType = {
 static int
 CreatePtext(Tcl_Interp *interp, Tk_PathCanvas canvas,
     struct Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[])
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ptextPtr->headerEx;
-    int	i;
+    Tcl_Size	i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -331,7 +331,7 @@ ProcessPtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas,
 
 static int
 PtextCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[])
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     int result;
@@ -451,7 +451,7 @@ ComputePtextBbox(Tk_PathCanvas canvas, PtextItem *ptextPtr)
 
 static int
 ConfigurePtext(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int flags)
+    Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     PtextItem *ptextPtr = (PtextItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ptextPtr->headerEx;
@@ -736,7 +736,7 @@ drawptext(Tcl_Interp *interp, PtextItem *ptextPtr, Tcl_Obj *ret, Tcl_Obj *cmdl)
 
 static int
 PtextToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int prepass)
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     Tk_PathStyle style;
     PtextItem *ptextPtr = (PtextItem *) itemPtr;

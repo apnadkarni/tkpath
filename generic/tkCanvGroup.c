@@ -40,11 +40,11 @@ typedef struct GroupItem  {
 
 void		GroupUpdateBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr);
 static int	ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, int objc,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int flags);
 static int	CreateGroup(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeleteGroup(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayGroup(Tk_PathCanvas canvas,
@@ -53,11 +53,11 @@ static void	DisplayGroup(Tk_PathCanvas canvas,
 static void	GroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int flags);
 static int	GroupCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	GroupToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
 static int	GroupToPdf(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int prepass);
 static double	GroupToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
@@ -123,7 +123,7 @@ Tk_PathItemType tkGroupType = {
 static int
 CreateGroup(Tcl_Interp *interp,
 	Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     GroupItem *groupPtr = (GroupItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &groupPtr->headerEx;
@@ -165,7 +165,7 @@ error:
 
 static int
 ConfigureGroup(Tcl_Interp *interp, Tk_PathCanvas canvas,
-	Tk_PathItem *itemPtr, int objc,
+	Tk_PathItem *itemPtr, Tcl_Size objc,
         Tcl_Obj *const objv[], int flags)
 {
     GroupItem *groupPtr = (GroupItem *) itemPtr;
@@ -271,7 +271,7 @@ GroupBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int flags)
 static int
 GroupCoords(Tcl_Interp *interp,
     Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[])
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     Tcl_SetObjResult(interp,
 	    Tcl_NewStringObj("group items have no coords", -1));
@@ -300,7 +300,7 @@ GroupToPoint(Tk_PathCanvas canvas,
 
 static int
 GroupToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-	int objc, Tcl_Obj *const objv[], int prepass)
+	Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     return TCL_OK;
 }

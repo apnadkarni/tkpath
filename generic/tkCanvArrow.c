@@ -13,13 +13,7 @@
 #include "tkCanvArrow.h"
 #include "tkCanvPathUtil.h"
 #include "tkPathStyle.h"
-
-#ifdef _MSC_VER
-#define isnan(x) ((x) != (x))
-#endif
-
-static const double zero = 0.0; // just for NaN
-#define NaN (zero/zero)
+#include <math.h>
 
 PathAtom *
 MakePathAtomsFromArrow(ArrowDescr *arrowDescr)
@@ -216,7 +210,7 @@ TkPathConfigureArrow(PathPoint pf, PathPoint pl, ArrowDescr *arrowDescr,
             poly[0].y = pf.y - shapeLength * shapeFill * sinTheta;
             poly[4] = poly[0];
         } else {
-            poly[0].x = poly[0].y = poly[4].x = poly[4].y = NaN;
+            poly[0].x = poly[0].y = poly[4].x = poly[4].y = NAN;
         }
         poly[1].x = p0.x - shapeWidth * sinTheta;
         poly[1].y = p0.y + shapeWidth * cosTheta;
@@ -287,7 +281,7 @@ GetSegmentsFromPathAtomList(PathAtom *firstAtom,
     int i;
 
     *firstPt = *lastPt = NULL;
-    secondPt->x = secondPt->y = penultPt->x = penultPt->y = NaN;
+    secondPt->x = secondPt->y = penultPt->x = penultPt->y = NAN;
 
     if (firstAtom && firstAtom->type != PATH_ATOM_M) {
         Tcl_Panic("Invalid path! Path must start with M(move) atom");
@@ -305,7 +299,7 @@ GetSegmentsFromPathAtomList(PathAtom *firstAtom,
                     secondPt->y = moveto->y;
                     i++;
                 }
-                penultPt->x = penultPt->y = NaN;
+                penultPt->x = penultPt->y = NAN;
                 *lastPt = (PathPointPtr)&moveto->x;
                 break;
             }

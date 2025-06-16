@@ -167,10 +167,10 @@ static void		ComputeTextBbox(Tk_PathCanvas canvas,
 			    TextItem *textPtr);
 static int		ConfigureText(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreateText(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeleteText(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayCanvText(Tk_PathCanvas canvas,
@@ -200,7 +200,7 @@ static int		TextToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
 static int		TextToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double		TextToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *pointPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -270,11 +270,11 @@ CreateText(
     Tk_PathCanvas canvas,	/* Canvas to hold new item. */
     Tk_PathItem *itemPtr,	/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
+    Tcl_Size objc,		/* Number of arguments in objv. */
     Tcl_Obj *const objv[])	/* Arguments describing rectangle. */
 {
     TextItem *textPtr = (TextItem *) itemPtr;
-    int i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -390,11 +390,7 @@ TextCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 2) {
-		char buf[64 + TCL_INTEGER_SPACE];
-
-		sprintf(buf, "wrong # coordinates: expected 2, got %ld", objc);
-		Tcl_SetResult(interp, buf, TCL_VOLATILE);
-		return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 2, 2, objc);
 	    }
 	}
 	if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0],
@@ -405,11 +401,7 @@ TextCoords(
 	}
 	ComputeTextBbox(canvas, textPtr);
     } else {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %ld", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
-	return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
     }
     return TCL_OK;
 }
@@ -438,7 +430,7 @@ ConfigureText(
     Tcl_Interp *interp,		/* Interpreter for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Rectangle item to reconfigure. */
-    int objc,			/* Number of elements in objv. */
+    Tcl_Size objc,		/* Number of elements in objv. */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -1564,7 +1556,7 @@ TextToPdf(
     Tcl_Interp *interp,		/* Leave Pdf or error message here. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is

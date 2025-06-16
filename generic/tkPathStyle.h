@@ -24,11 +24,11 @@ extern "C" {
 MODULE_SCOPE int	MatrixSetOption(ClientData clientData,
 			    Tcl_Interp *interp, Tk_Window tkwin,
 			    Tcl_Obj **value, char *recordPtr,
-			    int internalOffset, char *oldInternalPtr,
+			    Tcl_Size internalOffset, char *oldInternalPtr,
 			    int flags);
 MODULE_SCOPE Tcl_Obj *	MatrixGetOption(ClientData clientData,
 			    Tk_Window tkwin, char *recordPtr,
-			    int internalOffset);
+			    Tcl_Size internalOffset);
 MODULE_SCOPE void	MatrixRestoreOption(ClientData clientData,
 			    Tk_Window tkwin, char *internalPtr,
 			    char *oldInternalPtr);
@@ -37,11 +37,11 @@ MODULE_SCOPE void	MatrixFreeOption(ClientData clientData,
 MODULE_SCOPE int 	PathColorSetOption(ClientData clientData,
 			    Tcl_Interp *interp, Tk_Window tkwin,
 			    Tcl_Obj **value, char *recordPtr,
-			    int internalOffset, char *oldInternalPtr,
+			    Tcl_Size internalOffset, char *oldInternalPtr,
 			    int flags);
 MODULE_SCOPE Tcl_Obj *	PathColorGetOption(ClientData clientData,
 			    Tk_Window tkwin, char *recordPtr,
-			    int internalOffset);
+			    Tcl_Size internalOffset);
 MODULE_SCOPE void	PathColorRestoreOption(ClientData clientData,
 			    Tk_Window tkwin, char *internalPtr,
 			    char *oldInternalPtr);
@@ -50,11 +50,11 @@ MODULE_SCOPE void	PathColorFreeOption(ClientData clientData,
 MODULE_SCOPE int	Tk_PathDashOptionSetProc(ClientData clientData,
 			    Tcl_Interp *interp, Tk_Window tkwin,
 			    Tcl_Obj **value, char *recordPtr,
-			    int internalOffset, char *oldInternalPtr,
+			    Tcl_Size internalOffset, char *oldInternalPtr,
 			    int flags);
 MODULE_SCOPE Tcl_Obj *	Tk_PathDashOptionGetProc(ClientData clientData,
 			    Tk_Window tkwin, char *recordPtr,
-			    int internalOffset);
+			    Tcl_Size internalOffset);
 MODULE_SCOPE void	Tk_PathDashOptionRestoreProc(ClientData clientData,
 			    Tk_Window tkwin, char *internalPtr,
 			    char *oldInternalPtr);

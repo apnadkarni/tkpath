@@ -157,13 +157,13 @@ typedef struct Tk_PathItem {
  */
 
 typedef int	Tk_PathItemCreateProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[]);
 typedef int	Tk_PathItemConfigureProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int flags);
 typedef int	Tk_PathItemCoordProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[]);
 typedef void	Tk_PathItemDeleteProc(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
@@ -181,7 +181,7 @@ typedef int	Tk_PathItemPostscriptProc(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int prepass);
 #endif
 typedef int	Tk_PathItemPdfProc(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int prepass);
 typedef void	Tk_PathItemScaleProc(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, int compensate,

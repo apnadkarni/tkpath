@@ -65,8 +65,7 @@ CoordsForPointItems(
                     (Tcl_Obj ***) &objv) != TCL_OK) {
                 return TCL_ERROR;
             } else if (objc != 2) {
-                Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # coordinates: expected 0 or 2", -1));
-                return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
             }
         }
         if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &x) != TCL_OK)
@@ -76,8 +75,7 @@ CoordsForPointItems(
         pointPtr[0] = x;
         pointPtr[1] = y;
     } else {
-        Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # coordinates: expected 0 or 2", -1));
-        return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
     }
     return TCL_OK;
 }

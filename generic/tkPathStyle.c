@@ -51,7 +51,7 @@ int MatrixSetOption(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -94,9 +94,8 @@ Tcl_Obj *
 MatrixGetOption(
     ClientData clientData,
     Tk_Window tkwin,
-    char *recordPtr,	    /* Pointer to widget record. */
-    int internalOffset)	    /* Offset within *recordPtr containing the
-                             * value. */
+    char *recordPtr,	     /* Pointer to widget record. */
+    Tcl_Size internalOffset) /* Offset within *recordPtr containing the value. */
 {
     char 	*internalPtr;
     TMatrix 	*matrixPtr;
@@ -202,7 +201,7 @@ int Tk_PathDashOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -240,7 +239,7 @@ Tk_PathDashOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)	/* Offset within *recordPtr containing the
 				 * value. */
 {
     Tk_PathDash *dashPtr = (Tk_PathDash *) (recordPtr + internalOffset);
@@ -287,7 +286,7 @@ int PathColorSetOption(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -326,9 +325,8 @@ Tcl_Obj *
 PathColorGetOption(
     ClientData clientData,
     Tk_Window tkwin,
-    char *recordPtr,	    /* Pointer to widget record. */
-    int internalOffset)	    /* Offset within *recordPtr containing the
-                             * value. */
+    char *recordPtr,	    	/* Pointer to widget record. */
+    Tcl_Size internalOffset)    /* Offset in *recordPtr containing the value. */
 {
     char 	*internalPtr;
     Tcl_Obj 	*objPtr = NULL;

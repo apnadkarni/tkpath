@@ -494,6 +494,30 @@ Tk_PathPixelOptionRestoreProc(
 {
     *(double **)internalPtr = *(double **)oldInternalPtr;
 }
+
+int
+TkpWrongNumberOfCoordinates(
+    Tcl_Interp *interp,
+    Tcl_Size numExpected1,
+    Tcl_Size numExpected2,
+    Tcl_Size numPassed)
+{
+    if (interp) {
+        Tcl_Obj *objPtr;
+        if (numExpected1 == numExpected2) {
+            objPtr = Tcl_ObjPrintf("wrong # coordinates: expected %"
+                         TCL_SIZE_MODIFIER "d, got %" TCL_SIZE_MODIFIER "d",
+                         numExpected1, numPassed);
+        } else {
+            objPtr = Tcl_ObjPrintf("wrong # coordinates: expected %"
+                         TCL_SIZE_MODIFIER "d or %" TCL_SIZE_MODIFIER "d, got %"
+                         TCL_SIZE_MODIFIER "d",
+                         numExpected1, numExpected2, numPassed);
+        }
+        Tcl_SetObjResult(interp, objPtr);
+    }
+    return TCL_ERROR; /* Always, so caller can just return function value */
+}
 
 /*
  * Local Variables:

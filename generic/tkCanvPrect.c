@@ -32,11 +32,11 @@ typedef struct PrectItem  {
 
 static void	ComputePrectBbox(Tk_PathCanvas canvas, PrectItem *prectPtr);
 static int	ConfigurePrect(Tcl_Interp *interp, Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, int objc,
+                        Tk_PathItem *itemPtr, Tcl_Size objc,
                         Tcl_Obj *const objv[], int flags);
 static int	CreatePrect(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePrect(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPrect(Tk_PathCanvas canvas,
@@ -45,12 +45,12 @@ static void	DisplayPrect(Tk_PathCanvas canvas,
 static void	PrectBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask);
 static int	PrectCoords(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PrectToArea(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *rectPtr);
 static int	PrectToPdf(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			int objc, Tcl_Obj *const objv[], int prepass);
+			Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double	PrectToPoint(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *coordPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -133,11 +133,11 @@ Tk_PathItemType tkPrectType = {
 
 static int
 CreatePrect(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PrectItem *prectPtr = (PrectItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &prectPtr->headerEx;
-    int	i;
+    Tcl_Size	i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -189,7 +189,7 @@ CreatePrect(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 
 static int
 PrectCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PrectItem *prectPtr = (PrectItem *) itemPtr;
     int result;
@@ -225,7 +225,7 @@ ComputePrectBbox(Tk_PathCanvas canvas, PrectItem *prectPtr)
 
 static int
 ConfigurePrect(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[], int flags)
+        Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     PrectItem *prectPtr = (PrectItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &prectPtr->headerEx;
@@ -437,7 +437,7 @@ PrectToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 
 static int
 PrectToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int prepass)
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     Tk_PathStyle style;
     PathAtom *atomPtr;

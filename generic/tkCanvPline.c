@@ -33,11 +33,11 @@ typedef struct PlineItem  {
 
 static void	ComputePlineBbox(Tk_PathCanvas canvas, PlineItem *plinePtr);
 static int	ConfigurePline(Tcl_Interp *interp, Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, int objc,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
                     Tcl_Obj *const objv[], int flags);
 static int	CreatePline(Tcl_Interp *interp,
                     Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePline(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPline(Tk_PathCanvas canvas,
@@ -48,11 +48,11 @@ static int	ProcessCoords(Tcl_Interp *interp, Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PlineCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PlineToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
 static int	PlineToPdf(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int prepass);
 static double	PlineToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
@@ -119,11 +119,11 @@ Tk_PathItemType tkPlineType = {
 
 static int
 CreatePline(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PlineItem *plinePtr = (PlineItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &plinePtr->headerEx;
-    int	i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -197,8 +197,7 @@ ProcessCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
                     (Tcl_Obj ***) &objv) != TCL_OK) {
                 return TCL_ERROR;
             } else if (objc != 4) {
-                Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # coordinates: expected 0 or 4", -1));
-                return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 0, 4, objc);
             }
         }
         if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &p->x1) != TCL_OK)
@@ -208,15 +207,14 @@ ProcessCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
             return TCL_ERROR;
         }
     } else {
-        Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # coordinates: expected 0 or 4", -1));
-        return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 4, objc);
     }
     return TCL_OK;
 }
 
 static int
 PlineCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PlineItem *plinePtr = (PlineItem *) itemPtr;
     int result;
@@ -261,7 +259,7 @@ ComputePlineBbox(Tk_PathCanvas canvas, PlineItem *plinePtr)
 
 static int
 ConfigurePline(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[], int flags)
+        Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     PlineItem *plinePtr = (PlineItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &plinePtr->headerEx;
@@ -417,7 +415,7 @@ PlineToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 
 static int
 PlineToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int prepass)
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     Tk_PathStyle style;
     PathAtom *atomPtr;

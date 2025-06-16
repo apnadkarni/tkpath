@@ -41,32 +41,32 @@ enum {
 
 static void	ComputePpolyBbox(Tk_PathCanvas canvas, PpolyItem *ppolyPtr);
 static int	ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, int objc,
+                        Tk_PathItem *itemPtr, Tcl_Size objc,
                         Tcl_Obj *const objv[], int flags);
 static int	CoordsForPolygonline(Tcl_Interp *interp, Tk_PathCanvas canvas,
 			int closed, Tcl_Size objc, Tcl_Obj *const objv[],
-			PathAtom **atomPtrPtr, int *lenPtr);
+			PathAtom **atomPtrPtr, Tcl_Size *lenPtr);
 static int	CreateAny(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[], char type);
+                        Tcl_Size objc, Tcl_Obj *const objv[], char type);
 static int	CreatePolyline(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	CreatePpolygon(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePpoly(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPpoly(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, Display *display, Drawable drawable,
                         int x, int y, int width, int height);
 static void	PpolyBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int mask);
 static int	PpolyCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PpolyToArea(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *rectPtr);
 static int	PpolyToPdf(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			int objc, Tcl_Obj *const objv[], int prepass);
+			Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double	PpolyToPoint(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *coordPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -168,26 +168,26 @@ Tk_PathItemType tkPpolygonType = {
 
 static int
 CreatePolyline(Tcl_Interp *interp, Tk_PathCanvas canvas,
-    struct Tk_PathItem *itemPtr, int objc, Tcl_Obj *const objv[])
+    struct Tk_PathItem *itemPtr, Tcl_Size objc, Tcl_Obj *const objv[])
 {
     return CreateAny(interp, canvas, itemPtr, objc, objv, kPpolyTypePolyline);
 }
 
 static int
 CreatePpolygon(Tcl_Interp *interp, Tk_PathCanvas canvas,
-    struct Tk_PathItem *itemPtr, int objc, Tcl_Obj *const objv[])
+    struct Tk_PathItem *itemPtr, Tcl_Size objc, Tcl_Obj *const objv[])
 {
     return CreateAny(interp, canvas, itemPtr, objc, objv, kPpolyTypePolygon);
 }
 
 static int
 CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], char type)
+    Tcl_Size objc, Tcl_Obj *const objv[], char type)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ppolyPtr->headerEx;
     Tk_OptionTable optionTable;
-    int	i, len;
+    Tcl_Size	i, len;
 
     if (objc == 0) {
         Tcl_Panic("canvas did not pass any coords\n");
@@ -250,10 +250,11 @@ CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
 
 static int
 PpolyCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[])
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
-    int len, closed;
+    int closed;
+    Tcl_Size len;
 
     closed = (ppolyPtr->type == kPpolyTypePolyline) ? 0 : 1;
     if (CoordsForPolygonline(interp, canvas, closed, objc, objv,
@@ -349,7 +350,7 @@ ConfigureArrows(Tk_PathCanvas canvas, PpolyItem *ppolyPtr)
 
 static int
 ConfigurePpoly(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int flags)
+    Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ppolyPtr->headerEx;
@@ -485,7 +486,7 @@ PpolyToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 
 static int
 PpolyToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int prepass)
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     Tk_PathStyle style;
     PpolyItem *ppolyPtr = (PpolyItem *) itemPtr;
@@ -576,7 +577,7 @@ CoordsForPolygonline(
     Tcl_Size objc,
     Tcl_Obj *const objv[],
     PathAtom **atomPtrPtr,
-    int *lenPtr)
+    Tcl_Size *lenPtr)
 {
     PathAtom *atomPtr = *atomPtrPtr;
 
@@ -618,17 +619,17 @@ CoordsForPolygonline(
         }
     }
     if (objc & 1) {
-        char buf[64 + TCL_INTEGER_SPACE];
-        sprintf(buf, "wrong # coordinates: expected an even number, got %ld", objc);
-        Tcl_SetResult(interp, buf, TCL_VOLATILE);
+        Tcl_SetObjResult(interp,
+            Tcl_ObjPrintf("wrong # coordinates: expected an even number, got %"
+                          TCL_SIZE_MODIFIER "d", objc));
         return TCL_ERROR;
     } else if (objc < 4) {
-        char buf[64 + TCL_INTEGER_SPACE];
-        sprintf(buf, "wrong # coordinates: expected at least 4, got %ld", objc);
-        Tcl_SetResult(interp, buf, TCL_VOLATILE);
+        Tcl_SetObjResult(interp,
+            Tcl_ObjPrintf("wrong # coordinates: expected at least 4, got %"
+                                       TCL_SIZE_MODIFIER "d", objc));
         return TCL_ERROR;
     } else {
-        int 	i;
+        Tcl_Size i;
         double	x, y;
         double	firstX = 0.0, firstY = 0.0;
         PathAtom *firstAtomPtr = NULL;

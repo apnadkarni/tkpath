@@ -79,10 +79,10 @@ static void		ComputeWindowBbox(Tk_PathCanvas canvas,
 			    WindowItem *winItemPtr);
 static int		ConfigureWinItem(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreateWinItem(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeleteWinItem(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayWinItem(Tk_PathCanvas canvas,
@@ -109,7 +109,7 @@ static int		WinItemToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
 static int		WinItemToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 #ifndef TKP_NO_POSTSCRIPT
 static int		WinItemToPostscript(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
@@ -189,14 +189,14 @@ static const Tk_GeomMgr canvasGeomType = {
 static int
 CreateWinItem(
     Tcl_Interp *interp,		/* Interpreter for error reporting. */
-    Tk_PathCanvas canvas,		/* Canvas to hold new item. */
-    Tk_PathItem *itemPtr,		/* Record to hold new item; header has been
+    Tk_PathCanvas canvas,	/* Canvas to hold new item. */
+    Tk_PathItem *itemPtr,	/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
+    Tcl_Size objc,		/* Number of arguments in objv. */
     Tcl_Obj *const objv[])	/* Arguments describing window. */
 {
     WindowItem *winItemPtr = (WindowItem *) itemPtr;
-    int i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -288,10 +288,9 @@ WinItemCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 2) {
-		char buf[64 + TCL_INTEGER_SPACE];
-
-		sprintf(buf, "wrong # coordinates: expected 2, got %ld", objc);
-		Tcl_SetResult(interp, buf, TCL_VOLATILE);
+                Tcl_SetObjResult(interp,
+                    Tcl_ObjPrintf("wrong # coordinates: expected 2, got %"
+                                  TCL_SIZE_MODIFIER "d", objc));
 		return TCL_ERROR;
 	    }
 	}
@@ -302,10 +301,9 @@ WinItemCoords(
 	}
 	ComputeWindowBbox(canvas, winItemPtr);
     } else {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %ld", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
+        Tcl_SetObjResult(interp,
+                         Tcl_ObjPrintf("wrong # coordinates: expected 0 or 2, got %"
+                                       TCL_SIZE_MODIFIER "d", objc));
 	return TCL_ERROR;
     }
     return TCL_OK;
@@ -334,7 +332,7 @@ ConfigureWinItem(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Window item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
+    Tcl_Size objc,		/* Number of elements in objv.  */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -818,7 +816,7 @@ WinItemToPdf(
     Tcl_Interp *interp,		/* Leave Pdf or error message here. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is

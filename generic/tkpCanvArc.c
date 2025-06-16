@@ -219,10 +219,10 @@ static Tk_OptionSpec optionSpecs[] = {
 static void		ComputeArcBbox(Tk_PathCanvas canvas, ArcItem *arcPtr);
 static int		ConfigureArc(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreateArc(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeleteArc(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayArc(Tk_PathCanvas canvas,
@@ -236,7 +236,7 @@ static int		ArcToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
 static int		ArcToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double		ArcToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *coordPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -321,11 +321,11 @@ CreateArc(
     Tk_PathCanvas canvas,		/* Canvas to hold new item. */
     Tk_PathItem *itemPtr,	/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
+    Tcl_Size objc,			/* Number of arguments in objv. */
     Tcl_Obj *const objv[])	/* Arguments describing arc. */
 {
     ArcItem *arcPtr = (ArcItem *) itemPtr;
-    int i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -402,10 +402,10 @@ CreateArc(
 static int
 ArcCoords(
     Tcl_Interp *interp,		/* Used for error reporting. */
-    Tk_PathCanvas canvas,		/* Canvas containing item. */
-    Tk_PathItem *itemPtr,		/* Item whose coordinates are to be read or
+    Tk_PathCanvas canvas,	/* Canvas containing item. */
+    Tk_PathItem *itemPtr,	/* Item whose coordinates are to be read or
 				 * modified. */
-    Tcl_Size objc,			/* Number of coordinates supplied in objv. */
+    Tcl_Size objc,		/* Number of coordinates supplied in objv. */
     Tcl_Obj *const objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
 {
     ArcItem *arcPtr = (ArcItem *) itemPtr;
@@ -428,10 +428,9 @@ ArcCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 4) {
-		char buf[64 + TCL_INTEGER_SPACE];
-
-		sprintf(buf, "wrong # coordinates: expected 4, got %ld", objc);
-		Tcl_SetResult(interp, buf, TCL_VOLATILE);
+		Tcl_SetObjResult(interp,
+                    Tcl_ObjPrintf("wrong # coordinates: expected 4, got %"
+                                  TCL_SIZE_MODIFIER "d", objc));
 		return TCL_ERROR;
 	    }
 	}
@@ -447,10 +446,9 @@ ArcCoords(
 	}
 	ComputeArcBbox(canvas, arcPtr);
     } else {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected 0 or 4, got %ld", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
+        Tcl_SetObjResult(interp,
+            Tcl_ObjPrintf("wrong # coordinates: expected 0 or 4, got %"
+                          TCL_SIZE_MODIFIER "d", objc));
 	return TCL_ERROR;
     }
     return TCL_OK;
@@ -478,9 +476,9 @@ ArcCoords(
 static int
 ConfigureArc(
     Tcl_Interp *interp,		/* Used for error reporting. */
-    Tk_PathCanvas canvas,		/* Canvas containing itemPtr. */
-    Tk_PathItem *itemPtr,		/* Arc item to reconfigure. */
-    int objc,			/* Number of elements in objv. */
+    Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
+    Tk_PathItem *itemPtr,	/* Arc item to reconfigure. */
+    Tcl_Size objc,		/* Number of elements in objv. */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -1887,7 +1885,7 @@ ArcToPdf(
     Tcl_Interp *interp,		/* Leave Pdf or error message here. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is

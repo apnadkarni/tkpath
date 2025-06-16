@@ -1253,7 +1253,7 @@ TkPathPdf(
                              * of PathAtoms. */
     Tk_PathStyle *stylePtr, /* The path's style. */
     PathRect *bboxPtr,      /* The bounding box or NULL. */
-    int objc,		    /* Number of arguments of callback. */
+    Tcl_Size objc,	    /* Number of arguments of callback. */
     Tcl_Obj *const objv[])  /* Argument list of callback. */
 {
     Tcl_Obj *ret = Tcl_NewObj();

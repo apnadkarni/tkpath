@@ -101,7 +101,7 @@ static int		ImageToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
 static int		ImageToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double		ImageToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *coordPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -113,7 +113,7 @@ static void		ComputeImageBbox(Tk_PathCanvas canvas,
 			    ImageItem *imgPtr);
 static int		ConfigureImage(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreateImage(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
 			    Tcl_Size objc, Tcl_Obj *const objv[]);
@@ -286,11 +286,7 @@ ImageCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 2) {
-		char buf[64];
-
-		sprintf(buf, "wrong # coordinates: expected 2, got %ld", objc);
-		Tcl_SetResult(interp, buf, TCL_VOLATILE);
-		return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 2, 2, objc);
 	    }
 	}
 	if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &imgPtr->x) != TCL_OK)
@@ -300,11 +296,7 @@ ImageCoords(
 	}
 	ComputeImageBbox(canvas, imgPtr);
     } else {
-	char buf[64];
-
-	sprintf(buf, "wrong # coordinates: expected 0 or 2, got %ld", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
-	return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
     }
     return TCL_OK;
 }
@@ -332,7 +324,7 @@ ConfigureImage(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Image item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
+    Tcl_Size objc,		/* Number of elements in objv.  */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -771,7 +763,7 @@ ImageToPdf(
     Tcl_Interp *interp,		/* Leave Pdf or error message here. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is

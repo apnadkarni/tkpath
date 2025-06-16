@@ -37,16 +37,16 @@ enum {
 
 static void	ComputeEllipseBbox(Tk_PathCanvas canvas, EllipseItem *ellPtr);
 static int	ConfigureEllipse(Tcl_Interp *interp, Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, int objc,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int flags);
 static int	CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[], char type);
+		    Tcl_Size objc, Tcl_Obj *const objv[], char type);
 static int	CreateCircle(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	CreateEllipse(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeleteEllipse(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayEllipse(Tk_PathCanvas canvas,
@@ -56,11 +56,11 @@ static void	EllipseBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 		    int mask);
 static int	EllipseCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	EllipseToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
 static int	EllipseToPdf(Tcl_Interp *interp,
-		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int prepass);
 static double	EllipseToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
@@ -184,26 +184,26 @@ Tk_PathItemType tkEllipseType = {
 
 static int
 CreateCircle(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     return CreateAny(interp, canvas, itemPtr, objc, objv, kOvalTypeCircle);
 }
 
 static int
 CreateEllipse(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     return CreateAny(interp, canvas, itemPtr, objc, objv, kOvalTypeEllipse);
 }
 
 static int
 CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[], char type)
+        Tcl_Size objc, Tcl_Obj *const objv[], char type)
 {
     EllipseItem *ellPtr = (EllipseItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ellPtr->headerEx;
     Tk_OptionTable optionTable;
-    int	i;
+    Tcl_Size	i;
 
     if (objc == 0) {
         Tcl_Panic("canvas did not pass any coords\n");
@@ -258,7 +258,7 @@ CreateAny(Tcl_Interp *interp, Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
 
 static int
 EllipseCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[])
+        Tcl_Size objc, Tcl_Obj *const objv[])
 {
     EllipseItem *ellPtr = (EllipseItem *) itemPtr;
     int result;
@@ -307,7 +307,7 @@ ComputeEllipseBbox(Tk_PathCanvas canvas, EllipseItem *ellPtr)
 
 static int
 ConfigureEllipse(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-        int objc, Tcl_Obj *const objv[], int flags)
+        Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     EllipseItem *ellPtr = (EllipseItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &ellPtr->headerEx;
@@ -595,7 +595,7 @@ EllipseToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 
 static int
 EllipseToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int prepass)
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     Tk_PathStyle style;
     PathAtom *atomPtr;

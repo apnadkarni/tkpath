@@ -37,7 +37,7 @@ static void 	GradientInterpDeleted(ClientData clientData);
 static char *
 ComputeSlotAddress(
     char *recordPtr,	/* Pointer to the start of a record. */
-    int offset)		/* Offset of a slot within that record; may be < 0. */
+    Tcl_Size offset)	/* Offset of a slot within that record; may be < 0. */
 {
     if (offset >= 0) {
         return recordPtr + offset;
@@ -58,7 +58,7 @@ static int LinTransitionSet(
 				 * We use a pointer to the pointer because
 				 * we may need to return a value (NULL). */
     char *recordPtr,		/* Pointer to storage for the widget record. */
-    int internalOffset,		/* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	/* Offset within *recordPtr at which the
 				 * internal value is to be stored. */
     char *oldInternalPtr,	/* Pointer to storage for the old value. */
     int flags)			/* Flags for the option, set Tk_SetOptions. */
@@ -151,7 +151,7 @@ static int RadTransitionSet(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -294,17 +294,17 @@ StopsSet(
     Tcl_Interp *interp,		/* Current interp; may be used for errors. */
     Tk_Window tkwin,		/* Window for which option is being set. */
     Tcl_Obj **value,		/* Pointer to the pointer to the value object.
-                             * We use a pointer to the pointer because
-                             * we may need to return a value (NULL). */
+				 * We use a pointer to the pointer because
+				 * we may need to return a value (NULL). */
     char *recordPtr,		/* Pointer to storage for the widget record. */
-    int internalOffset,		/* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,	/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,	/* Pointer to storage for the old value. */
     int flags)				/* Flags for the option, set Tk_SetOptions. */
 {
     char *internalPtr;
     Tcl_Size nstops, stopLen;
-    int i;
+    Tcl_Size i;
     int objEmpty = 0;
     Tcl_Obj *valuePtr;
     double offset, lastOffset, opacity;

@@ -45,17 +45,17 @@ typedef struct PathItem  {
 
 static void	ComputePathBbox(Tk_PathCanvas canvas, PathItem *pathPtr);
 static int	ConfigurePath(Tcl_Interp *interp, Tk_PathCanvas canvas,
-                        Tk_PathItem *itemPtr, int objc,
+                        Tk_PathItem *itemPtr, Tcl_Size objc,
                         Tcl_Obj *const objv[], int flags);
 static int	CreatePath(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	ProcessPath(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PathCoords(Tcl_Interp *interp,
                         Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-                        int objc, Tcl_Obj *const objv[]);
+                        Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePath(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPath(Tk_PathCanvas canvas,
@@ -66,7 +66,7 @@ static void	PathBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 static int	PathToArea(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *areaPtr);
 static int	PathToPdf(Tcl_Interp *interp,
-                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr, int objc,
+                        Tk_PathCanvas canvas, Tk_PathItem *itemPtr, Tcl_Size objc,
 			Tcl_Obj *const objv[], int prepass);
 static double	PathToPoint(Tk_PathCanvas canvas,
                         Tk_PathItem *itemPtr, double *coordPtr);
@@ -181,7 +181,7 @@ CreatePath(
     Tcl_Interp *interp, 	/* Used for error reporting. */
     Tk_PathCanvas canvas, 	/* Canvas containing item. */
     Tk_PathItem *itemPtr, 	/* Item to create. */
-    int objc,                   /* Number of elements in objv.  */
+    Tcl_Size objc,                   /* Number of elements in objv.  */
     Tcl_Obj *const objv[])	/* Arguments describing the item. */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
@@ -268,7 +268,7 @@ ProcessPath(
     Tk_PathCanvas canvas,   /* Canvas containing item. */
     Tk_PathItem *itemPtr,   /* Item whose coordinates are to be
                              * read or modified. */
-    int objc,               /*  */
+    Tcl_Size objc,
     Tcl_Obj *const objv[])  /*  */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
@@ -341,7 +341,7 @@ PathCoords(
     Tk_PathCanvas canvas,   /* Canvas containing item. */
     Tk_PathItem *itemPtr,   /* Item whose coordinates are to be
                              * read or modified. */
-    int objc,               /*  */
+    Tcl_Size objc,
     Tcl_Obj *const objv[])  /*  */
 {
     PathItem *pathPtr = (PathItem *) itemPtr;
@@ -465,7 +465,7 @@ ConfigurePath(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Line item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
+    Tcl_Size objc,		/* Number of elements in objv.  */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -1016,7 +1016,7 @@ PathToPdf(
     Tk_PathCanvas canvas,   /* Information about overall canvas. */
     Tk_PathItem *itemPtr,   /* Item for which Pdf is
                              * wanted. */
-    int objc,               /* Number of arguments. */
+    Tcl_Size objc,          /* Number of arguments. */
     Tcl_Obj *const objv[],  /* Argument list. */
     int prepass)            /* 1 means this is a prepass to
                              * collect font information;  0 means

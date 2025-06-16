@@ -49,10 +49,10 @@ static void		ComputeRectOvalBbox(Tk_PathCanvas canvas,
 			    RectOvalItem *rectOvalPtr);
 static int		ConfigureRectOval(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreateRectOval(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeleteRectOval(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayRectOval(Tk_PathCanvas canvas,
@@ -68,7 +68,7 @@ static int		RectOvalCoords(Tcl_Interp *interp, Tk_PathCanvas canvas,
 			    Tcl_Obj *const objv[]);
 static int		RectOvalToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 #ifndef TKP_NO_POSTSCRIPT
 static int		RectOvalToPostscript(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
@@ -290,12 +290,12 @@ CreateRectOval(
     Tk_PathCanvas canvas,	/* Canvas to hold new item. */
     Tk_PathItem *itemPtr,	/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
+    Tcl_Size objc,			/* Number of arguments in objv. */
     Tcl_Obj *const objv[])	/* Arguments describing rectangle. */
 {
     RectOvalItem *rectOvalPtr = (RectOvalItem *) itemPtr;
     Tk_OptionTable optionTable;
-    int i;
+    Tcl_Size i;
 
     if (objc == 0) {
 	Tcl_Panic("canvas did not pass any coords\n");
@@ -411,11 +411,7 @@ RectOvalCoords(
      */
 
     if (objc != 4) {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected 0 or 4, got %ld", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
-	return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 4, objc);
     }
 
     /*
@@ -460,7 +456,7 @@ ConfigureRectOval(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Rectangle item to reconfigure. */
-    int objc,			/* Number of elements in objv. */
+    Tcl_Size objc,		/* Number of elements in objv. */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -1343,7 +1339,7 @@ RectOvalToPdf(
     Tcl_Interp *interp,		/* Interpreter for error reporting. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is

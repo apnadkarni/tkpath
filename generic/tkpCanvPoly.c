@@ -205,10 +205,10 @@ static void		ComputePolygonBbox(Tk_PathCanvas canvas,
 			    PolygonItem *polyPtr);
 static int		ConfigurePolygon(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		CreatePolygon(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeletePolygon(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr,  Display *display);
 static void		DisplayPolygon(Tk_PathCanvas canvas,
@@ -229,7 +229,7 @@ static int		PolygonToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
 static int		PolygonToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double		PolygonToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *pointPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -310,11 +310,11 @@ CreatePolygon(
     Tk_PathCanvas canvas,	/* Canvas to hold new item. */
     Tk_PathItem *itemPtr,	/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
+    Tcl_Size objc,		/* Number of arguments in objv. */
     Tcl_Obj *const objv[])	/* Arguments describing polygon. */
 {
     PolygonItem *polyPtr = (PolygonItem *) itemPtr;
-    int i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -427,12 +427,9 @@ PolygonCoords(
 	}
     }
     if (objc & 1) {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected an even number, got %ld",
-		objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
-	return TCL_ERROR;
+	Tcl_SetObjResult(interp,
+            Tcl_ObjPrintf("wrong # coordinates: expected an even number, got %"
+                          TCL_SIZE_MODIFIER "d", objc));
     } else {
 	numPoints = objc/2;
 	if (polyPtr->pointsAllocated <= numPoints) {
@@ -498,7 +495,7 @@ ConfigurePolygon(
     Tcl_Interp *interp,		/* Interpreter for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Polygon item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
+    Tcl_Size objc,		/* Number of elements in objv.  */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -1866,7 +1863,7 @@ PolygonToPdf(
     Tcl_Interp *interp,		/* Leave Pdf or error message here. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is

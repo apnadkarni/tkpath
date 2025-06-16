@@ -54,11 +54,11 @@ typedef struct PimageItem  {
 
 static void	ComputePimageBbox(Tk_PathCanvas canvas, PimageItem *pimagePtr);
 static int	ConfigurePimage(Tcl_Interp *interp, Tk_PathCanvas canvas,
-		    Tk_PathItem *itemPtr, int objc,
+		    Tk_PathItem *itemPtr, Tcl_Size objc,
 		    Tcl_Obj *const objv[], int flags);
 static int	CreatePimage(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void	DeletePimage(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, Display *display);
 static void	DisplayPimage(Tk_PathCanvas canvas,
@@ -68,11 +68,11 @@ static void	PimageBbox(Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
 		    int mask);
 static int	PimageCoords(Tcl_Interp *interp,
 		    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-		    int objc, Tcl_Obj *const objv[]);
+		    Tcl_Size objc, Tcl_Obj *const objv[]);
 static int	PimageToArea(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *rectPtr);
 static int	PimageToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas,
-		    Tk_PathItem *item, int objc, Tcl_Obj *const objv[],
+		    Tk_PathItem *item, Tcl_Size objc, Tcl_Obj *const objv[],
 		    int prepass);
 static double	PimageToPoint(Tk_PathCanvas canvas,
 		    Tk_PathItem *itemPtr, double *coordPtr);
@@ -123,9 +123,9 @@ static const char *imageInterpolationST[] = {
 
 static int	PathRectSetOption(ClientData clientData, Tcl_Interp *interp,
 		    Tk_Window tkwin, Tcl_Obj **value, char *recordPtr,
-		    int internalOffset, char *oldInternalPtr, int flags);
+		    Tcl_Size internalOffset, char *oldInternalPtr, int flags);
 static Tcl_Obj *PathRectGetOption(ClientData clientData, Tk_Window tkwin,
-		    char *recordPtr, int internalOffset);
+		    char *recordPtr, Tcl_Size internalOffset);
 static void	PathRectRestoreOption(ClientData clientData, Tk_Window tkwin,
 		    char *internalPtr, char *oldInternalPtr);
 static void	PathRectFreeOption(ClientData clientData, Tk_Window tkwin,
@@ -248,11 +248,11 @@ Tk_PathItemType tkPimageType = {
 
 static int
 CreatePimage(Tcl_Interp *interp, Tk_PathCanvas canvas,
-    Tk_PathItem *itemPtr, int objc, Tcl_Obj *const objv[])
+    Tk_PathItem *itemPtr, Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PimageItem *pimagePtr = (PimageItem *) itemPtr;
     Tk_PathItemEx *itemExPtr = &pimagePtr->headerEx;
-    int	i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -316,7 +316,7 @@ CreatePimage(Tcl_Interp *interp, Tk_PathCanvas canvas,
 
 static int
 PimageCoords(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[])
+    Tcl_Size objc, Tcl_Obj *const objv[])
 {
     PimageItem *pimagePtr = (PimageItem *) itemPtr;
     int result;
@@ -443,7 +443,7 @@ ComputePimageBbox(Tk_PathCanvas canvas, PimageItem *pimagePtr)
 
 static int
 ConfigurePimage(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int flags)
+    Tcl_Size objc, Tcl_Obj *const objv[], int flags)
 {
     PimageItem *pimagePtr = (PimageItem *) itemPtr;
     Tk_Window tkwin;
@@ -625,7 +625,7 @@ PimageToArea(Tk_PathCanvas canvas, Tk_PathItem *itemPtr, double *areaPtr)
 
 static int
 PimageToPdf(Tcl_Interp *interp, Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-    int objc, Tcl_Obj *const objv[], int prepass)
+    Tcl_Size objc, Tcl_Obj *const objv[], int prepass)
 {
     Tk_PathStyle style;
     PimageItem *pimagePtr = (PimageItem *) itemPtr;
@@ -1215,7 +1215,7 @@ PathRectSetOption(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,        /* Pointer to storage for the widget record. */
-    int internalOffset,     /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)          /* Flags for the option, set Tk_SetOptions. */
@@ -1259,7 +1259,7 @@ PathRectGetOption(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,        /* Pointer to widget record. */
-    int internalOffset)     /* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)/* Offset within *recordPtr containing the
                              * value. */
 {
     char    *internalPtr;

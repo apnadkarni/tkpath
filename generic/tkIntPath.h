@@ -571,7 +571,7 @@ MODULE_SCOPE void	TkPathStyleChanged(Tk_PathStyle *masterPtr, int flags);
 
 MODULE_SCOPE int	TkPathPdf(Tcl_Interp *interp, PathAtom *atomPtr,
 			    Tk_PathStyle *stylePtr, PathRect *bboxPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 MODULE_SCOPE int	TkPathPdfArrow(Tcl_Interp *interp, ArrowDescr *arrow,
 			    Tk_PathStyle *const style);
 MODULE_SCOPE int	TkPathPdfColor(Tcl_Obj *ret, XColor *colorPtr,
@@ -579,6 +579,14 @@ MODULE_SCOPE int	TkPathPdfColor(Tcl_Obj *ret, XColor *colorPtr,
 MODULE_SCOPE Tcl_Obj *	TkPathExtGS(Tk_PathStyle *stylePtr, long *smaskRef);
 MODULE_SCOPE int	TkPathPdfNumber(Tcl_Obj *ret, int fracDigis,
 			    double number, const char *append);
+
+/*
+ * Support functions for error messages.
+ */
+MODULE_SCOPE int         TkpWrongNumberOfCoordinates(Tcl_Interp *interp,
+                             Tcl_Size numExpected1, Tcl_Size numExpected2,
+                             Tcl_Size numPassed);
+
 
 /*
  * end block for C++

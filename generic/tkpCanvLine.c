@@ -79,22 +79,22 @@ static int		ArrowheadPostscript(Tcl_Interp *interp,
 #endif
 static Tcl_Obj *	ArrowShapeOptionGetProc(ClientData clientData,
 			    Tk_Window tkwin, char *recordPtr,
-			    int internalOffset);
+			    Tcl_Size internalOffset);
 static int		ArrowShapeOptionSetProc(ClientData clientData,
 			    Tcl_Interp *interp, Tk_Window tkwin,
 			    Tcl_Obj **value, char *recordPtr,
-			    int internalOffset, char *oldInternalPtr,
+			    Tcl_Size internalOffset, char *oldInternalPtr,
 			    int flags);
 static void		ComputeLineBbox(Tk_PathCanvas canvas,
 			    LineItem *linePtr);
 static int		ConfigureLine(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int flags);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int flags);
 static int		ConfigureArrows(Tk_PathCanvas canvas,
 			    LineItem *linePtr);
 static int		CreateLine(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, struct Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[]);
+			    Tcl_Size objc, Tcl_Obj *const objv[]);
 static void		DeleteLine(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, Display *display);
 static void		DisplayLine(Tk_PathCanvas canvas,
@@ -115,7 +115,7 @@ static int		LineToArea(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *rectPtr);
 static int		LineToPdf(Tcl_Interp *interp,
 			    Tk_PathCanvas canvas, Tk_PathItem *itemPtr,
-			    int objc, Tcl_Obj *const objv[], int prepass);
+			    Tcl_Size objc, Tcl_Obj *const objv[], int prepass);
 static double		LineToPoint(Tk_PathCanvas canvas,
 			    Tk_PathItem *itemPtr, double *coordPtr);
 #ifndef TKP_NO_POSTSCRIPT
@@ -344,11 +344,11 @@ CreateLine(
     Tk_PathCanvas canvas,	/* Canvas to hold new item. */
     Tk_PathItem *itemPtr,	/* Record to hold new item; header has been
 				 * initialized by caller. */
-    int objc,			/* Number of arguments in objv. */
+    Tcl_Size objc,		/* Number of arguments in objv. */
     Tcl_Obj *const objv[])	/* Arguments describing line. */
 {
     LineItem *linePtr = (LineItem *) itemPtr;
-    int i;
+    Tcl_Size i;
     Tk_OptionTable optionTable;
 
     if (objc == 0) {
@@ -426,10 +426,10 @@ CreateLine(
 static int
 LineCoords(
     Tcl_Interp *interp,		/* Used for error reporting. */
-    Tk_PathCanvas canvas,		/* Canvas containing item. */
-    Tk_PathItem *itemPtr,		/* Item whose coordinates are to be read or
+    Tk_PathCanvas canvas,	/* Canvas containing item. */
+    Tk_PathItem *itemPtr,	/* Item whose coordinates are to be read or
 				 * modified. */
-    Tcl_Size objc,			/* Number of coordinates supplied in objv. */
+    Tcl_Size objc,		/* Number of coordinates supplied in objv. */
     Tcl_Obj *const objv[])	/* Array of coordinates: x1, y1, x2, y2, ... */
 {
     LineItem *linePtr = (LineItem *) itemPtr;
@@ -466,17 +466,14 @@ LineCoords(
 	}
     }
     if (objc & 1) {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected an even number, got %ld",
-		objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
+        Tcl_SetObjResult(interp,
+            Tcl_ObjPrintf("wrong # coordinates: expected an even number, got %"
+                          TCL_SIZE_MODIFIER "d", objc));
 	return TCL_ERROR;
     } else if (objc < 4) {
-	char buf[64 + TCL_INTEGER_SPACE];
-
-	sprintf(buf, "wrong # coordinates: expected at least 4, got %ld", objc);
-	Tcl_SetResult(interp, buf, TCL_VOLATILE);
+        Tcl_SetObjResult(interp,
+                         Tcl_ObjPrintf("wrong # coordinates: expected at least 4, got %"
+                                       TCL_SIZE_MODIFIER "d", objc));
 	return TCL_ERROR;
     } else {
 	numPoints = objc/2;
@@ -542,7 +539,7 @@ ConfigureLine(
     Tcl_Interp *interp,		/* Used for error reporting. */
     Tk_PathCanvas canvas,	/* Canvas containing itemPtr. */
     Tk_PathItem *itemPtr,	/* Line item to reconfigure. */
-    int objc,			/* Number of elements in objv.  */
+    Tcl_Size objc,		/* Number of elements in objv.  */
     Tcl_Obj *const objv[],	/* Arguments describing things to configure. */
     int flags)			/* Flags to pass to Tk_ConfigureWidget. */
 {
@@ -1937,7 +1934,7 @@ ArrowShapeOptionSetProc(
                              * We use a pointer to the pointer because
                              * we may need to return a value (NULL). */
     char *recordPtr,	    /* Pointer to storage for the widget record. */
-    int internalOffset,	    /* Offset within *recordPtr at which the
+    Tcl_Size internalOffset,/* Offset within *recordPtr at which the
                                internal value is to be stored. */
     char *oldInternalPtr,   /* Pointer to storage for the old value. */
     int flags)		    /* Flags for the option, set Tk_SetOptions. */
@@ -1995,7 +1992,7 @@ ArrowShapeOptionGetProc(
     ClientData clientData,
     Tk_Window tkwin,
     char *recordPtr,		/* Pointer to widget record. */
-    int internalOffset)		/* Offset within *recordPtr containing the
+    Tcl_Size internalOffset)	/* Offset within *recordPtr containing the
 				 * value. */
 {
     return (Tcl_Obj *)(recordPtr + internalOffset);
@@ -2197,7 +2194,7 @@ LineToPdf(
     Tcl_Interp *interp,		/* Leave Pdf or error message here. */
     Tk_PathCanvas canvas,	/* Information about overall canvas. */
     Tk_PathItem *itemPtr,	/* Item for which Pdf is wanted. */
-    int objc,                   /* Number of arguments. */
+    Tcl_Size objc,              /* Number of arguments. */
     Tcl_Obj *const objv[],      /* Argument list. */
     int prepass)		/* 1 means this is a prepass to collect font
 				 * information; 0 means final Pdf is
