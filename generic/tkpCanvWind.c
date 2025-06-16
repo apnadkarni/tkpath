@@ -288,10 +288,7 @@ WinItemCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 2) {
-                Tcl_SetObjResult(interp,
-                    Tcl_ObjPrintf("wrong # coordinates: expected 2, got %"
-                                  TCL_SIZE_MODIFIER "d", objc));
-		return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 2, 2, objc);
 	    }
 	}
 	if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &winItemPtr->x)
@@ -301,10 +298,7 @@ WinItemCoords(
 	}
 	ComputeWindowBbox(canvas, winItemPtr);
     } else {
-        Tcl_SetObjResult(interp,
-                         Tcl_ObjPrintf("wrong # coordinates: expected 0 or 2, got %"
-                                       TCL_SIZE_MODIFIER "d", objc));
-	return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 2, objc);
     }
     return TCL_OK;
 }

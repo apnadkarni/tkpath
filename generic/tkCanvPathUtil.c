@@ -123,8 +123,7 @@ CoordsForRectangularItems(
                     (Tcl_Obj ***) &objv) != TCL_OK) {
                 return TCL_ERROR;
             } else if (objc != 4) {
-                Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # coordinates: expected 0 or 4", -1));
-                return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 0, 4, objc);
             }
         }
         if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0], &x1) != TCL_OK)
@@ -144,8 +143,7 @@ CoordsForRectangularItems(
         rectPtr->x2 = MAX(x1, x2);
         rectPtr->y2 = MAX(y1, y2);
     } else {
-        Tcl_SetObjResult(interp, Tcl_NewStringObj("wrong # coordinates: expected 0 or 4", -1));
-        return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 4, objc);
     }
     return TCL_OK;
 }

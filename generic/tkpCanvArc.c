@@ -428,10 +428,7 @@ ArcCoords(
 		    (Tcl_Obj ***) &objv) != TCL_OK) {
 		return TCL_ERROR;
 	    } else if (objc != 4) {
-		Tcl_SetObjResult(interp,
-                    Tcl_ObjPrintf("wrong # coordinates: expected 4, got %"
-                                  TCL_SIZE_MODIFIER "d", objc));
-		return TCL_ERROR;
+                return TkpWrongNumberOfCoordinates(interp, 4, 4, objc);
 	    }
 	}
 	if ((Tk_PathCanvasGetCoordFromObj(interp, canvas, objv[0],
@@ -446,10 +443,7 @@ ArcCoords(
 	}
 	ComputeArcBbox(canvas, arcPtr);
     } else {
-        Tcl_SetObjResult(interp,
-            Tcl_ObjPrintf("wrong # coordinates: expected 0 or 4, got %"
-                          TCL_SIZE_MODIFIER "d", objc));
-	return TCL_ERROR;
+        return TkpWrongNumberOfCoordinates(interp, 0, 4, objc);
     }
     return TCL_OK;
 }
